@@ -259,11 +259,38 @@ async def receive_poll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        # This handler is used during quiz creation to collect the pre-message *before* the poll is created
+        # If user directly sent a poll while bot was waiting for pre-message => treat as auto-skip
+        if update.message.poll:
+            # Use any previously stored pending_pre_message (or empty)
+            pre_msg = context.user_data.pop("pending_pre_message", "")
+            poll = update.message.poll
+            if poll.type != "quiz":
+                await update.message.reply_text("❌ Kripya Quiz mode wala poll hi send karein:")
+                return PRE_MESSAGE
+            if len(poll.options) > 7:
+                await update.message.reply_text("❌ Maximum 7 options allowed. Re-send poll:")
+                return PRE_MESSAGE
+
+            opts = [o.text for o in poll.options]
+            q_data = {
+                "text": poll.question,
+                "options": opts,
+                "correct": opts[poll.correct_option_id],
+                "explanation": poll.explanation if poll.explanation else "",
+                "pre_message": pre_msg
+            }
+            context.user_data["quiz_build"]["questions"].append(q_data)
+            await update.message.reply_text(
+                f"✅ Question added! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question(s).\n\n"
+                "Next — send the pre-message for the next question (text/media) or type /skip to skip pre-message, then create the next poll.\n\n"
+                "When you're finished, type /done to finish quiz creation."
+            )
+            return PRE_MESSAGE
+
+        # Normal pre-message flow (text/caption/skip)
         if update.message.text and update.message.text.lower() == "/skip":
             pending = ""
         else:
-            # Store text or media caption
             if update.message.text:
                 pending = update.message.text.strip()
             elif update.message.caption:
