@@ -130,7 +130,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🏁 *Click 'I am ready!' to start the quiz.*"
             )
             
-            keyboard = [[InlineKeyboardButton("I am ready! 🎯 (0)", callback_data=f"ready_{quiz_id}")]]
+            keyboard = [[InlineKeyboardButton("I am ready!  (0)", callback_data=f"ready_{quiz_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(init_text, reply_markup=reply_markup, parse_mode="Markdown")
             return
@@ -1149,7 +1149,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
             asyncio.create_task(send_next_group_poll(chat_id, context))
         else:
             # Update only button with new count - panel message stays SAME
-            keyboard = [[InlineKeyboardButton(f"I am ready! 🎯 ({ready_count})", callback_data=f"ready_{quiz_id}")]]
+            keyboard = [[InlineKeyboardButton(f"I am ready!  ({ready_count})", callback_data=f"ready_{quiz_id}")]]
             
             # EDIT ONLY THE BUTTON, NOT THE WHOLE MESSAGE
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
