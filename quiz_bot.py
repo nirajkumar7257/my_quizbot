@@ -23,8 +23,8 @@ DB_FILE = "quiz_bot.db"
 # Global dictionary for active group games memory
 GROUP_GAMES = {}
 
-# Conversation flow states
-TITLE, DESCRIPTION, QUESTIONS, PRE_MESSAGE, TIMER = range(5)
+# Conversation flow states - CORRECTED ORDER
+TITLE, DESCRIPTION, PRE_MESSAGE, QUESTIONS, TIMER = range(5)
 EDIT_TITLE, EDIT_DESC, EDIT_TIMER = range(5, 8)
 EDIT_QUESTION_TEXT, EDIT_QUESTION_OPTIONS, EDIT_QUESTION_CORRECT, EDIT_QUESTION_EXPLANATION, EDIT_QUESTION_PRE_MESSAGE = range(8, 13)
 
@@ -204,6 +204,26 @@ async def receive_desc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     try:
         text = update.message.text
         context.user_data["quiz_build"]["description"] = "" if text.lower() == "/skip" else text.strip()
+        
+        # NOW ask for pre-message BEFORE asking for questions
+        await update.message.reply_text(
+            "📢 **Optional: Send a pre-message**\n\n"
+            "This message will be shown to players BEFORE they start answering questions.\n"
+            "It can be instructions, context, or just encouragement.\n\n"
+            "Send your pre-message or type /skip to continue without one.",
+            reply_markup=get_persistent_keyboard()
+        )
+        return PRE_MESSAGE
+    except Exception as e:
+        logging.error(f"Error in receive_desc: {e}")
+        return DESCRIPTION
+
+async def receive_quiz_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Receive optional pre-message for the entire quiz (shown before all questions)"""
+    try:
+        text = update.message.text
+        context.user_data["quiz_build"]["quiz_pre_message"] = "" if text.lower() == "/skip" else text.strip()
+        
         await update.message.reply_text(
             f"Good. Your quiz '{context.user_data['quiz_build']['title']}' now has 0 questions. If you made a mistake, send /undo.\n\n"
             "💡 **Sawal jodne ke liye:**\nClick on 📎 (Attachment) -> Select **Poll**.\n"
@@ -213,8 +233,8 @@ async def receive_desc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         return QUESTIONS
     except Exception as e:
-        logging.error(f"Error in receive_desc: {e}")
-        return DESCRIPTION
+        logging.error(f"Error in receive_quiz_pre_message: {e}")
+        return PRE_MESSAGE
 
 async def receive_poll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
@@ -311,9 +331,23 @@ async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return PRE_MESSAGE
         
-        # Handle /skip command
+        # Handle /skip or /done commands
         if update.message.text and update.message.text.lower() == "/skip":
             context.user_data["quiz_build"]["questions"][current_idx]["pre_message"] = ""
+            context.user_data.pop("current_question_index", None)
+            await update.message.reply_text(
+                f"✅ Skipped pre-message. Your quiz now has {len(context.user_data['quiz_build']['questions'])} question(s).\n\n"
+                "💬 **Next step:**\n"
+                "• Send next question poll\n"
+                "• Or type /done to finish quiz",
+                reply_markup=get_persistent_keyboard()
+            )
+            return QUESTIONS
+        elif update.message.text and update.message.text.lower() == "/done":
+            # User wants to finish from pre-message state
+            context.user_data["quiz_build"]["questions"][current_idx]["pre_message"] = ""
+            context.user_data.pop("current_question_index", None)
+            return await finish_quiz_creation(update, context)
         else:
             # Store text or media caption
             if update.message.text:
@@ -323,16 +357,16 @@ async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             else:
                 context.user_data["quiz_build"]["questions"][current_idx]["pre_message"] = ""
         
-        context.user_data.pop("current_question_index", None)
-        
-        await update.message.reply_text(
-            f"✅ Pre-message set! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question(s).\n\n"
-            "💬 **Next step:**\n"
-            "• Send next question poll\n"
-            "• Or type /done to finish quiz",
-            reply_markup=get_persistent_keyboard()
-        )
-        return QUESTIONS
+            context.user_data.pop("current_question_index", None)
+            
+            await update.message.reply_text(
+                f"✅ Pre-message set! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question(s).\n\n"
+                "💬 **Next step:**\n"
+                "• Send next question poll\n"
+                "• Or type /done to finish quiz",
+                reply_markup=get_persistent_keyboard()
+            )
+            return QUESTIONS
     except Exception as e:
         logging.error(f"Error in receive_pre_message: {e}")
         return QUESTIONS
@@ -1471,8 +1505,8 @@ def main():
             states={
                 TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_title)],
                 DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_desc), CommandHandler("skip", receive_desc)],
+                PRE_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_quiz_pre_message), CommandHandler("skip", receive_quiz_pre_message)],
                 QUESTIONS: [CommandHandler("undo", handle_undo), CommandHandler("done", finish_quiz_creation), MessageHandler(filters.POLL, receive_poll)],
-                PRE_MESSAGE: [MessageHandler(filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.ANIMATION | filters.POLL, receive_pre_message), CommandHandler("skip", receive_pre_message)],
                 TIMER: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_timer_text)]
             },
             fallbacks=[CommandHandler("cancel", cancel)],
