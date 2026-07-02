@@ -149,7 +149,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Pehle niche wala container bhejenge
         poll_button = KeyboardButton(
-            text="📊 Create a Question",
+            text="Create a Question",
             request_poll=KeyboardButtonPollType(type="quiz")
         )
         bottom_container = ReplyKeyboardMarkup(
@@ -199,9 +199,9 @@ async def receive_desc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         context.user_data["quiz_build"]["description"] = "" if text.lower() == "/skip" else text.strip()
         await update.message.reply_text(
             f"Good. Your quiz '{context.user_data['quiz_build']['title']}' now has 0 questions. If you made a mistake, send /undo.\n\n"
-            "💡 **Sawal jodne ke liye:**\nClick on 📎 (Attachment) -> Select **Poll**.\n"
+            "💡 **Now send me a poll with your first question.\n\n"
             "Enable **Quiz Mode**, add 2-7 options, pick the correct one, and tap Create.\n\n"
-            "Send /done when finished adding questions.",
+            "Warning: this bot can't create anonymous polls.",
             reply_markup=ReplyKeyboardRemove()
         )
         return QUESTIONS
@@ -233,8 +233,8 @@ async def receive_poll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             "⚡ **Quick options:**\n"
             "• 📎 Send media/details to add context\n"
             "• 📄 Send text message for pre-message\n"
-            "• ➕ Send next poll directly (auto-skips pre-message)\n"
-            "• ✅ Type /done to finish quiz"
+            "• ➕ Now Send the next question directly (auto-skips pre-message)"
+            
         )
         return PRE_MESSAGE
     except Exception as e:
@@ -279,8 +279,8 @@ async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "⚡ **Quick options:**\n"
                 "• 📎 Send media/details to add context\n"
                 "• 📄 Send text message for pre-message\n"
-                "• ➕ Send next poll directly (auto-skips pre-message)\n"
-                "• ✅ Type /done to finish quiz"
+                "• ➕ Now Send the next question directly (auto-skips pre-message)"
+                
             )
             return PRE_MESSAGE
         
@@ -302,7 +302,8 @@ async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"✅ Pre-message set! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question(s).\n\n"
             "💬 **Next step:**\n"
             "• Send next question poll\n"
-            "• Or type /done to finish quiz"
+            "• Or\n"
+            "• type /done to finish quiz"
         )
         return QUESTIONS
     except Exception as e:
