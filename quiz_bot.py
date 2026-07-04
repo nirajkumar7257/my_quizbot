@@ -656,9 +656,9 @@ async def show_summary_panel_text(update, context, quiz_id):
         )
         
         inline_keyboard = [
-            [InlineKeyboardButton("🏁 Start Private Chat", callback_data=f"startprivate_{quiz_id}")],
-            [InlineKeyboardButton("👥 Start in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
-            [InlineKeyboardButton("📢 Share Quiz", url=f"https://t.me/share/url?url=Check%20out%20this%20quiz:%20https://t.me/{bot_username}?start=quiz_{quiz_id}")],
+            [InlineKeyboardButton("Start Private Chat", callback_data=f"startprivate_{quiz_id}")],
+            [InlineKeyboardButton("Start Quiz in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
+            [InlineKeyboardButton("Share Quiz", url=f"https://t.me/share/url?url=Check%20out%20this%20quiz:%20https://t.me/{bot_username}?start=quiz_{quiz_id}")],
             [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{quiz_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
@@ -743,12 +743,12 @@ async def handle_quiz_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
         time_display = f"{timer} sec" if timer < 60 else f"{timer // 60} min"
         
         status_text = (
-            f"📊 **Quiz Status**\n\n"
-            f"📚 **Title:** {escape_markdown(title)}\n"
-            f"📝 **Description:** {escape_markdown(description) if description else 'No description'}\n"
-            f"❓ **Total Questions:** {total_q[0]}\n"
-            f"⏱️ **Time per Q:** {time_display}\n"
-            f"✅ **Status:** Active"
+            f"📊 Quiz Status\n\n"
+            f"Title:** {escape_markdown(title)}\n"
+            f"Description: {escape_markdown(description) if description else 'No description'}\n"
+            f"Total Questions: {total_q[0]}\n"
+            f"Time per Q: {time_display}\n"
+            f"✅ Status: Active"
         )
         
         await query.edit_message_text(
@@ -769,14 +769,14 @@ async def edit_quiz_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quiz_id = int(query.data.split("_")[1])
         
         keyboard = [
-            [InlineKeyboardButton("❓ Edit Question", callback_data=f"edquestion_{quiz_id}")],
-            [InlineKeyboardButton("📝 Edit Title", callback_data=f"edtitle_{quiz_id}")],
-            [InlineKeyboardButton("ℹ️ Edit Description", callback_data=f"eddesc_{quiz_id}")],
-            [InlineKeyboardButton("⏱ Edit Timer", callback_data=f"edtime_{quiz_id}")],
+            [InlineKeyboardButton("Edit Question", callback_data=f"edquestion_{quiz_id}")],
+            [InlineKeyboardButton("Edit Title", callback_data=f"edtitle_{quiz_id}")],
+            [InlineKeyboardButton("Edit Description", callback_data=f"eddesc_{quiz_id}")],
+            [InlineKeyboardButton("Edit Timer", callback_data=f"edtime_{quiz_id}")],
             [InlineKeyboardButton("Back 🔙", callback_data=f"backto_{quiz_id}")]
         ]
         await query.edit_message_text(
-            text="⚙️ **Edit Quiz Menu**\n\nAap is quiz ka kya badalna chahte hain? Niche se chunyein:",
+            text="⚙️ Edit Quiz Menu\n\nAap is quiz ka kya badalna chahte hain? Niche se chunyein:",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
         )
     except Exception as e:
@@ -817,7 +817,7 @@ async def edit_question_trigger(update: Update, context: ContextTypes.DEFAULT_TY
             )
             return
         
-        text = "📚 **Select a question to edit:**\n\n"
+        text = "📚 Select a question to edit:\n\n"
         keyboard = []
         
         for idx, (q_id, q_text) in enumerate(questions, 1):
