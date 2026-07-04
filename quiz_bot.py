@@ -1055,7 +1055,7 @@ async def handle_delete_question(update: Update, context: ContextTypes.DEFAULT_T
         
         # Show confirmation
         await query.edit_message_text(
-            text="⚠️ **Are you sure you want to delete this question?**\n\n"
+            text="⚠️ Are you sure you want to delete this question?\n\n"
                  "This action cannot be undone!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("✅ Yes, Delete", callback_data=f"confirmdel_{quiz_id}_{question_id}")],
@@ -1299,7 +1299,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 pass
             
             # Send countdown messages instead of editing the setup message
-            for count in ["5", "4", "3", "2", "1"]:
+            for count in ["🎲 The quiz is about to begin…", "3️⃣....", "2️⃣Ready...", "1️⃣ SET…", "Go..🚀"]:
                 countdown_msg = await context.bot.send_message(chat_id=chat_id, text=count)
                 await asyncio.sleep(1)
                 try:
@@ -1458,7 +1458,7 @@ async def send_next_group_poll(chat_id, context):
         game["start_time"] = datetime.now()
         
         poll_msg = await context.bot.send_poll(
-            chat_id=chat_id, question=f"[{game['current_q'] + 1}/{len(questions)}]: {q_text}",
+            chat_id=chat_id, question=f"[{game['current_q'] + 1}/{len(questions)}] {q_text}",
             options=options, type="quiz", correct_option_id=correct_idx,
             explanation=explanation if explanation else None, is_anonymous=False
         )
@@ -1501,7 +1501,7 @@ async def send_next_group_poll(chat_id, context):
                 if game["consecutive_no_answers"] >= 2:
                     game["quiz_paused"] = True
                     
-                    pause_msg = f"🖥️ The quiz '{escape_markdown(quiz_title)}' was paused because nobody was answering"
+                    pause_msg = f"🔐 The quiz '{escape_markdown(quiz_title)}' was paused because nobody was answering"
                     
                     keyboard = [
                         [InlineKeyboardButton("Resume Quiz", callback_data=f"pausequiz_{chat_id}")],
