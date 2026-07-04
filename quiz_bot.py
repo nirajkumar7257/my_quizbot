@@ -135,11 +135,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             time_disp = f"{timer} sec" if timer < 60 else f"{timer // 60} min"
             
             init_text = (
-                f"🎲 **Get ready for the quiz!**\n\n"
-                f"📚 **Title:** {escape_markdown(title)}\n"
-                f"🔥 **Description:** {escape_markdown(desc) if desc else 'No description'}\n"
-                f"🖊️ **Questions:** {total_q[0]}\n"
-                f"⏱ **Time per question:** {time_disp}\n\n"
+                f"🎲 *Get ready for the quiz!*\n\n"
+                f"📚 *Title:* {escape_markdown(title)}\n"
+                f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\n"
+                f"🖊️ *Questions:* {total_q[0]}\n"
+                f"⏱ *Time per question:* {time_disp}\n\n"
                 "🏁 *Click 'I am ready!' to start the quiz.*\n"
                 "🏁 *The quiz will begin when at least 2 people are ready to play. Send /stop to stop it.*"
             )
@@ -151,12 +151,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Normal private chat initialization layout
         welcome_text = (
-            "👋 Welcome to Premium Quiz Bot!\n\n"
-            "Aap is bot se quizzes bana kar apne dosto ke sath groups me realtime khel sakte hain.\n\n"
-            "💡 Check Available Commands:\n"
-            "➤ /help – Open help center\n\n"
-            "👥 Add the bot to a group and start quizzes\n"
-            "📢 For support, contact owner."
+            "👋 *Welcome to Premium Quiz Bot!*\n\n"
+            "*Aap is bot se quizzes bana kar apne dosto ke sath groups me realtime khel sakte hain.*\n\n"
+            "💡 *Check Available Commands:*\n"
+            "➤ /help *– Open help center*\n\n"
+            "👥 *Add the bot to a group and start quizzes*\n"
+            "📢 *For support, contact owner.*"
         )
         keyboard = [
             [InlineKeyboardButton("Create New Quiz 🚀", callback_data="btn_newquiz")],
@@ -1668,12 +1668,12 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         
         welcome_text = (
-            "👋 Welcome to Premium Quiz Bot!\n\n"
-            "Aap is bot se quizzes bana kar apne dosto ke sath groups me realtime khel sakte hain.\n\n"
-            "💡 Check Available Commands:\n"
-            "➤ /help – Open help center\n\n"
-            "👥 Add the bot to a group and start quizzes\n"
-            "📢 For support, contact owner."
+            "👋 *Welcome to Premium Quiz Bot!*\n\n"
+            "*Aap is bot se quizzes bana kar apne dosto ke sath groups me realtime khel sakte hain.*\n\n"
+            "💡 *Check Available Commands:*\n"
+            "➤ /help *– Open help center*\n\n"
+            "👥 *Add the bot to a group and start quizzes*\n"
+            "📢 *For support, contact owner.*"
         )
         keyboard = [
             [InlineKeyboardButton("Create New Quiz 🚀", callback_data="btn_newquiz")],
