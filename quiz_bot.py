@@ -1712,31 +1712,32 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query.query
+    query = update.inline_query.query  # इसमें "quiz_123" आता है
     
-    if not query:
-        return
-
+    # अगर यूजर ने सिर्फ बॉट का नाम लिखा है और कोई आईडी नहीं दी (यानी खाली सर्च है)
+    # तो डिफ़ॉल्ट रूप से कोई मैसेज या हेल्प कार्ड दिखाने के लिए:
+    quiz_id = query if query else "default" 
+    
     bot_info = await context.bot.get_me()
     bot_username = bot_info.username
 
-    share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=f"https://t.me{bot_username}?start={query}")]]
+    share_button = [[InlineKeyboardButton("🚀 Start Quiz", url=f"https://t.me{bot_username}?start={quiz_id}")]]
     reply_markup = InlineKeyboardMarkup(share_button)
 
     results = [
         InlineQueryResultArticle(
-            id=str(query),
-            title="🎯 Share Quiz Bot",
-            description="इस क्विज़ को ग्रुप या दोस्त के साथ शेयर करने के लिए यहाँ क्लिक करें.",
+            id="quiz_share_card",
+            title="🎯 Share Quiz Bot" if query else "📢 Share Your Quiz",
+            description=f"Quiz ID: {quiz_id}" if query else "Click here to share your default quiz.",
             input_message_content=InputTextMessageContent(
-                message_text=f"📊 *एक नया क्विज़ शेयर किया गया है!*\n\nनीचे दिए गए बटन पर क्लिक करके खेलना शुरू करें।",
+                message_text=f"📊 *एक नया क्विज़ शेयर किया गया है!*\n\nखेलना शुरू करने के लिए नीचे बटन दबाएं।",
                 parse_mode="Markdown"
             ),
             reply_markup=reply_markup
         )
     ]
 
-    await update.inline_query.answer(results, cache_time=5)
+    await update.inline_query.answer(results, cache_time=0)
 
 def main():
     if not BOT_TOKEN:
