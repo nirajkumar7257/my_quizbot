@@ -1721,7 +1721,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     bot_username = bot_info.username
 
     # चैट के अंदर दिखने वाला सुंदर "Start this Quiz" बटन
-    share_button = [[InlineKeyboardButton("Start this Quiz", url=f"https://t.me{bot_username}?start={query}")]]
+    share_button = [[InlineKeyboardButton("Start this Quiz", url=f"https://t.me/{bot_username}?start={query}")]]
     reply_markup = InlineKeyboardMarkup(share_button)
 
     results = [
