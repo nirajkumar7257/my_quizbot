@@ -1712,32 +1712,39 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query.query  # इसमें "quiz_123" आता है
-    
-    # अगर यूजर ने सिर्फ बॉट का नाम लिखा है और कोई आईडी नहीं दी (यानी खाली सर्च है)
-    # तो डिफ़ॉल्ट रूप से कोई मैसेज या हेल्प कार्ड दिखाने के लिए:
-    quiz_id = query if query else "default" 
-    
-    bot_info = await context.bot.get_me()
-    bot_username = bot_info.username
+    try:
+        query = update.inline_query.query  # इसमें "quiz_123" आता है
+        
+        # अगर यूजर ने सिर्फ बॉट का नाम लिखा है (क्वेरी खाली है), तो डिफ़ॉल्ट ID सेट करें
+        quiz_id = query if query else "default"
+        
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
 
-    share_button = [[InlineKeyboardButton("🚀 Start Quiz", url=f"https://t.me{bot_username}?start={quiz_id}")]]
-    reply_markup = InlineKeyboardMarkup(share_button)
+        # 1. पहले बटन का स्ट्रक्चर तैयार करें (स्लैश फिक्स के साथ)
+        share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=f"https://t.me{bot_username}?start={quiz_id}")]]
+        reply_markup = InlineKeyboardMarkup(share_button)
 
-    results = [
-        InlineQueryResultArticle(
-            id="quiz_share_card",
-            title="🎯 Share Quiz Bot" if query else "📢 Share Your Quiz",
-            description=f"Quiz ID: {quiz_id}" if query else "Click here to share your default quiz.",
-            input_message_content=InputTextMessageContent(
-                message_text=f"📊 *एक नया क्विज़ शेयर किया गया है!*\n\nखेलना शुरू करने के लिए नीचे बटन दबाएं।",
-                parse_mode="Markdown"
-            ),
-            reply_markup=reply_markup
-        )
-    ]
+        # 2. इन-लाइन रिजल्ट तैयार करें (नोट: reply_markup को आर्टिकल लेवल पर रखना है)
+        results = [
+            InlineQueryResultArticle(
+                id=str(quiz_id),
+                title="🎯 Share Quiz Bot",
+                description=f"क्विज़ (ID: {quiz_id}) को इस चैट में भेजने के लिए यहाँ क्लिक करें.",
+                # यहाँ सिर्फ टेक्स्ट रहेगा, बटन नहीं!
+                input_message_content=InputTextMessageContent(
+                    message_text=f"📊 *एक नया क्विज़ उपलब्ध है!*\n\nलाइव खेलने के लिए नीचे दिए गए बटन पर क्लिक करें।",
+                    parse_mode="Markdown"
+                ),
+                reply_markup=reply_markup  # ✅ सही जगह: बटन हमेशा यहाँ होना चाहिए
+            )
+        ]
 
-    await update.inline_query.answer(results, cache_time=0)
+        # cache_time=0 रखने से पुराना गलत कैशे लोड नहीं होगा और तुरंत नया कोड काम करेगा
+        await update.inline_query.answer(results, cache_time=0)
+        
+    except Exception as e:
+        logging.error(f"Error in inline_query_handler: {e}")
 
 def main():
     if not BOT_TOKEN:
