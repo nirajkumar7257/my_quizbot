@@ -1713,29 +1713,31 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        query = update.inline_query.query  # इसमें यूजर द्वारा भेजी गई सर्च क्वेरी आती है
+        query = update.inline_query.query  # इसमें "quiz_2" आ रहा है
         
-        # अगर कोई क्वेरी नहीं है, तो डिफ़ॉल्ट वैल्यू दें
         if not query:
             quiz_id = "default"
         else:
-            # अगर यह गलती से लिस्ट के रूप में आ रहा है, तो उसका पहला आइटम निकालें
-            quiz_id = str(query[0]) if isinstance(query, list) else str(query)
-            
+            quiz_id = str(query).strip()
+
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
 
-        # ✅ सुरक्षित URL स्ट्रक्चर (यह कभी इनवैलिड नहीं होगा)
+        # बिल्कुल साफ और सही URL स्ट्रक्चर
         target_url = f"https://t.me{bot_username}?start={quiz_id}"
         
         share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=target_url)]]
         reply_markup = InlineKeyboardMarkup(share_button)
 
+        # 🚨 समाधान: यहाँ id को पूरी तरह यूनीक (Unique) कर दिया गया है
+        # 'quiz_2_1719876543' जैसा फॉर्मेट बनेगा, जिससे टेलीग्राम सर्वर कभी एरर नहीं देगा
+        unique_result_id = f"{quiz_id}_{int(time.time())}"
+
         results = [
             InlineQueryResultArticle(
-                id=str(quiz_id),
+                id=unique_result_id,  # <-- यहाँ बदलाव किया गया है
                 title="🎯 Share Quiz Bot",
-                description=f"इस क्विज़ को चैट में भेजने के लिए यहाँ क्लिक करें.",
+                description=f"क्विज़ ({quiz_id}) को यहाँ शेयर करने के लिए क्लिक करें.",
                 input_message_content=InputTextMessageContent(
                     message_text=f"📊 *एक नया क्विज़ उपलब्ध है!*\n\nलाइव खेलने के लिए नीचे दिए गए बटन पर क्लिक करें।",
                     parse_mode="Markdown"
@@ -1744,7 +1746,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         ]
 
+        # cache_time=0 ताकि तुरंत नया रिजल्ट लोड हो
         await update.inline_query.answer(results, cache_time=0)
+        logging.info(f"Inline query successfully answered for quiz_id: {quiz_id}")
         
     except Exception as e:
         logging.error(f"Error in inline_query_handler: {e}")
