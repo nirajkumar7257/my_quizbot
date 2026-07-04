@@ -1713,34 +1713,37 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        query = update.inline_query.query  # इसमें "quiz_123" आता है
+        query = update.inline_query.query  # इसमें यूजर द्वारा भेजी गई सर्च क्वेरी आती है
         
-        # अगर यूजर ने सिर्फ बॉट का नाम लिखा है (क्वेरी खाली है), तो डिफ़ॉल्ट ID सेट करें
-        quiz_id = query if query else "default"
-        
+        # अगर कोई क्वेरी नहीं है, तो डिफ़ॉल्ट वैल्यू दें
+        if not query:
+            quiz_id = "default"
+        else:
+            # अगर यह गलती से लिस्ट के रूप में आ रहा है, तो उसका पहला आइटम निकालें
+            quiz_id = str(query[0]) if isinstance(query, list) else str(query)
+            
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
 
-        # 1. पहले बटन का स्ट्रक्चर तैयार करें (स्लैश फिक्स के साथ)
-        share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=f"https://t.me{bot_username}?start={quiz_id}")]]
+        # ✅ सुरक्षित URL स्ट्रक्चर (यह कभी इनवैलिड नहीं होगा)
+        target_url = f"https://t.me{bot_username}?start={quiz_id}"
+        
+        share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=target_url)]]
         reply_markup = InlineKeyboardMarkup(share_button)
 
-        # 2. इन-लाइन रिजल्ट तैयार करें (नोट: reply_markup को आर्टिकल लेवल पर रखना है)
         results = [
             InlineQueryResultArticle(
                 id=str(quiz_id),
                 title="🎯 Share Quiz Bot",
-                description=f"क्विज़ (ID: {quiz_id}) को इस चैट में भेजने के लिए यहाँ क्लिक करें.",
-                # यहाँ सिर्फ टेक्स्ट रहेगा, बटन नहीं!
+                description=f"इस क्विज़ को चैट में भेजने के लिए यहाँ क्लिक करें.",
                 input_message_content=InputTextMessageContent(
                     message_text=f"📊 *एक नया क्विज़ उपलब्ध है!*\n\nलाइव खेलने के लिए नीचे दिए गए बटन पर क्लिक करें।",
                     parse_mode="Markdown"
                 ),
-                reply_markup=reply_markup  # ✅ सही जगह: बटन हमेशा यहाँ होना चाहिए
+                reply_markup=reply_markup
             )
         ]
 
-        # cache_time=0 रखने से पुराना गलत कैशे लोड नहीं होगा और तुरंत नया कोड काम करेगा
         await update.inline_query.answer(results, cache_time=0)
         
     except Exception as e:
