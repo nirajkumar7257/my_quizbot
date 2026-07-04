@@ -1458,7 +1458,7 @@ async def send_next_group_poll(chat_id, context):
         game["start_time"] = datetime.now()
         
         poll_msg = await context.bot.send_poll(
-            chat_id=chat_id, question=f"❓ Q ({game['current_q'] + 1}/{len(questions)}): {q_text}",
+            chat_id=chat_id, question=f"[{game['current_q'] + 1}/{len(questions)}]: {q_text}",
             options=options, type="quiz", correct_option_id=correct_idx,
             explanation=explanation if explanation else None, is_anonymous=False
         )
