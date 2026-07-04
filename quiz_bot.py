@@ -605,9 +605,9 @@ async def show_summary_panel(query, context, quiz_id):
         
         summary_text = (
             "👍 Here's your quiz:\n\n"
-            f"📚 **{escaped_title}**\n"
-            f"📝 **Description:** {escaped_desc}\n"
-            f"🙋‍♂️ {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
+            f"Title **{escaped_title}**\n"
+            f"**Description:** {escaped_desc}\n"
+            f"🎯 {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
             f"🔗 External sharing link:\n"
             f"`https://t.me/{bot_username}?start=quiz_{quiz_id}`"
         )
