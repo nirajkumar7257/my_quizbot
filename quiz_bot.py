@@ -109,7 +109,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Check for active quiz creation
         if check_active_quiz_creation(update.message.from_user.id, context):
             await update.message.reply_text(
-                "⚠️ **You have an unfinished quiz.** Please finish creating your quiz or send /cancel.\n\n"
+                "⚠️ You have an unfinished quiz. Please finish creating your quiz or send /cancel.\n\n"
                 "You cannot start a new quiz or use other commands until you complete this one."
             )
             return
@@ -330,7 +330,8 @@ async def receive_poll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             "➤ 📎 Send media | details (text, image, video, etc.) that will be add context\n"
             "➤ 📄 Send text message for pre-message\n\n"
             "💬 Optional:\n"
-            "➤ ➕ Now Send the next question directly (auto-skips pre-message)"
+            "➤ ➕ Now Send the next question directly (auto-skips pre-message)\n"
+            "➤ ⚠️ Quiz Finish karne ke liye Pre-message set kare!"
             
         )
         return PRE_MESSAGE
