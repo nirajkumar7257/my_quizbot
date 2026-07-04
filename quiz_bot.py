@@ -1712,7 +1712,7 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query.query  # इसमें "quiz_123" जैसी ID आएगी
+    query = update.inline_query.query
     
     if not query:
         return
@@ -1720,7 +1720,6 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     bot_info = await context.bot.get_me()
     bot_username = bot_info.username
 
-    # चैट के अंदर दिखने वाला सुंदर "Start this Quiz" बटन
     share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=f"https://t.me{bot_username}?start={query}")]]
     reply_markup = InlineKeyboardMarkup(share_button)
 
