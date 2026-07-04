@@ -188,13 +188,13 @@ This project is open-source and available under the MIT License.
 
 ## 👤 Author
 
-**Manisha Kumar** [@manishakumarim293-ctrl](https://github.com/manishakumarim293-ctrl)
+**Niraj Kumar** [@nirajkumar7257](https://github.com/nirajkumar7257)
 
 ---
 
 ## 💬 Support & Feedback
 
-For issues, bugs, or feature requests, please open a [GitHub Issue](https://github.com/manishakumarim293-ctrl/Quiz_Bot/issues).
+For issues, bugs, or feature requests, please open a [GitHub Issue](https://github.com/nirajkumar7257/Quiz_Bot/issues).
 
 ---
 
