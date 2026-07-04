@@ -1765,6 +1765,69 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logging.error(f"Error in handle_view_quiz_callback: {e}")
     
+async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.inline_query.query  # इसमें "start_12" या "share_12" आएगा
+    
+    if not query:
+        return
+
+    try:
+        # टेक्स्ट में से सिर्फ नंबर (quiz_id) अलग करें
+        quiz_id_str = query.replace("start_", "").replace("share_", "")
+        if not quiz_id_str.isdigit():
+            return
+        quiz_id = int(quiz_id_str)
+
+        # डेटाबेस से जानकारी निकालें
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT title, timer FROM quizzes WHERE quiz_id = ?", (quiz_id,))
+        quiz_data = cursor.fetchone()
+        
+        if not quiz_data:
+            conn.close()
+            return
+            
+        quiz_title, quiz_timer = quiz_data
+        
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
+        question_count = cursor.fetchone()[0] # <-- फ़िक्स किया गया [0]
+        conn.close()
+
+        formatted_time = format_time(quiz_timer)
+
+        # ग्रुप में जो मैसेज फॉरवर्ड होगा उसका लुक
+        quiz_text = (
+            f"🎲 Quiz \"⚙️ *{quiz_title}* ✨\n"
+            f" {{लल्लनटॉप प्रश्नोत्तरी}} [[ Based On All Comptative Exams ]] ⚙️\"\n"
+            f"📝 *{question_count} questions*  •  ⏱️ *{formatted_time}*"
+        )
+
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+
+        # ✅ यहाँ '/' फिक्स कर दिया गया है ताकि लिंक सही काम करे
+        share_button = [[InlineKeyboardButton("Start this Quiz", url=f"https://t.me/{bot_username}?start=quiz_{quiz_id}")]]
+        reply_markup = InlineKeyboardMarkup(share_button)
+
+        results = [
+            InlineQueryResultArticle(
+                id=str(quiz_id),
+                title=f"Quiz: {quiz_title}",
+                description=f"{question_count} Questions • {formatted_time}",
+                input_message_content=InputTextMessageContent(
+                    message_text=quiz_text,
+                    parse_mode="Markdown"
+                ),
+                reply_markup=reply_markup
+            )
+        ]
+
+        await update.inline_query.answer(results, cache_time=5)
+
+    except Exception as e:
+        logging.error(f"Error in inline_query_handler: {e}")
+        
 def main():
     if not BOT_TOKEN:
         logging.error("BOT_TOKEN not found in environment variables!")
