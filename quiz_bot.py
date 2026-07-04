@@ -5,10 +5,15 @@ import logging
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, KeyboardButtonPollType, ReplyKeyboardMarkup
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, 
+    KeyboardButton, KeyboardButtonPollType, ReplyKeyboardMarkup,
+    InlineQueryResultArticle, InputTextMessageContent
+)
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
-    filters, ContextTypes, ConversationHandler, CallbackQueryHandler, PollAnswerHandler
+    filters, ContextTypes, ConversationHandler, CallbackQueryHandler, PollAnswerHandler,
+    InlineQueryHandler
 )
 from telegram.request import HTTPXRequest
 
@@ -617,7 +622,7 @@ async def show_summary_panel(query, context, quiz_id):
         inline_keyboard = [
             [InlineKeyboardButton("Start quiz in Private Chat", callback_data=f"startprivate_{quiz_id}")],
             [InlineKeyboardButton("Start quiz in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
-            [InlineKeyboardButton("Share Quiz", url=f"https://t.me/share/url?url=Check%20out%20this%20quiz:%20https://t.me/{bot_username}?start=quiz_{quiz_id}")],
+            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{quiz_id}")],
             [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{quiz_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
@@ -660,7 +665,7 @@ async def show_summary_panel_text(update, context, quiz_id):
         inline_keyboard = [
             [InlineKeyboardButton("Start Private Chat", callback_data=f"startprivate_{quiz_id}")],
             [InlineKeyboardButton("Start Quiz in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
-            [InlineKeyboardButton("Share Quiz", url=f"https://t.me/share/url?url=Check%20out%20this%20quiz:%20https://t.me/{bot_username}?start=quiz_{quiz_id}")],
+            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{quiz_id}")],
             [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{quiz_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
@@ -1706,6 +1711,34 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.inline_query.query  # इसमें "quiz_123" जैसी ID आएगी
+    
+    if not query:
+        return
+
+    bot_info = await context.bot.get_me()
+    bot_username = bot_info.username
+
+    # चैट के अंदर दिखने वाला सुंदर "Start this Quiz" बटन
+    share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=f"https://t.me{bot_username}?start={query}")]]
+    reply_markup = InlineKeyboardMarkup(share_button)
+
+    results = [
+        InlineQueryResultArticle(
+            id=str(query),
+            title="🎯 Share Quiz Bot",
+            description="इस क्विज़ को ग्रुप या दोस्त के साथ शेयर करने के लिए यहाँ क्लिक करें.",
+            input_message_content=InputTextMessageContent(
+                message_text=f"📊 *एक नया क्विज़ शेयर किया गया है!*\n\nनीचे दिए गए बटन पर क्लिक करके खेलना शुरू करें।",
+                parse_mode="Markdown"
+            ),
+            reply_markup=reply_markup
+        )
+    ]
+
+    await update.inline_query.answer(results, cache_time=5)
+
 def main():
     if not BOT_TOKEN:
         logging.error("BOT_TOKEN not found in environment variables!")
@@ -1791,6 +1824,7 @@ def main():
         app.add_handler(CallbackQueryHandler(handle_stop_quiz_from_pause, pattern="^stopquiz_"))
         
         app.add_handler(PollAnswerHandler(track_poll_answers))
+        app.add_handler(InlineQueryHandler(inline_query_handler))
         
         logging.info("🚀 Advanced Telegram Quiz-Bot UI Active...")
         app.run_polling()
