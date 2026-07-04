@@ -373,12 +373,13 @@ async def receive_pre_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data["current_question_index"] = len(context.user_data["quiz_build"]["questions"]) - 1
             
             await update.message.reply_text(
-                f"✅ Question added! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question.\n\n"
+            f"✅ Question added! Your quiz now has {len(context.user_data['quiz_build']['questions'])} question.\n\n"
             "⚡ Quick options:\n"
             "➤ 📎 Send media | details (text, image, video, etc.) that will be add context\n"
             "➤ 📄 Send text message for pre-message\n\n"
             "💬 Optional:\n"
-            "➤ ➕ Now Send the next question directly (auto-skips pre-message)"
+            "➤ ➕ Now Send the next question directly (auto-skips pre-message)\n"
+            "➤ ⚠️ Quiz Finish karne ke liye Pre-message set kare!"
             
             )
             return PRE_MESSAGE
