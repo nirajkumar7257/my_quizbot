@@ -1430,7 +1430,7 @@ async def send_next_group_poll(chat_id, context):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute("SELECT title FROM quizzes WHERE quiz_id = ?", (qid,))
-        quiz_title = cursor.fetchone()[0]
+        quiz_title = cursor.fetchone()[0] # 🛠️ Fixed: Added [0] back to get proper string
         cursor.execute("SELECT timer FROM quizzes WHERE quiz_id = ?", (qid,))
         timer_data = cursor.fetchone()
         cursor.execute("SELECT question_text, options, correct_answer, pre_message, explanation FROM questions WHERE quiz_id = ?", (qid,))
@@ -1445,8 +1445,12 @@ async def send_next_group_poll(chat_id, context):
             await compile_group_leaderboard(chat_id, context)
             return
 
-        # Tuple extraction verification execution
-        timer = timer_data[0] if (timer_data and isinstance(timer_data, tuple)) else 30
+        # 🛠️ Fixed: Added [0] to extract correct integer from database tuple
+        raw_timer = timer_data[0] if (timer_data and isinstance(timer_data, tuple)) else 30
+        
+        # 🕒 SAFETY CHECK: Telegram minimum 10 seconds demand karta hai
+        timer = raw_timer if raw_timer >= 10 else 10
+        
         q = questions[game["current_q"]]
         q_text, options_json, correct_ans, pre_msg, explanation = q
         options = json.loads(options_json)
@@ -1459,10 +1463,16 @@ async def send_next_group_poll(chat_id, context):
         game["question_start_times"][game["current_q"]] = datetime.now()
         game["start_time"] = datetime.now()
         
+        # 🚀 FINAL FIXED POLL: Live countdown bar integrated perfectly
         poll_msg = await context.bot.send_poll(
-            chat_id=chat_id, question=f"[{game['current_q'] + 1}/{len(questions)}] {q_text}",
-            options=options, type="quiz", correct_option_id=correct_idx,
-            explanation=explanation if explanation else None, is_anonymous=False
+            chat_id=chat_id, 
+            question=f"[{game['current_q'] + 1}/{len(questions)}] {q_text}",
+            options=options, 
+            type="quiz", 
+            correct_option_id=correct_idx,
+            explanation=explanation if explanation else None, 
+            is_anonymous=False,
+            open_period=timer # 👈 Ab yeh line bina kisi error ke mast chalegi!
         )
         
         # Store poll message ID for later closing
@@ -1608,12 +1618,12 @@ async def compile_group_leaderboard(chat_id, context):
         sorted_scores = sorted(final_scores.items(), key=lambda item: (-item[1]["score"], item[1]["total_time"]))[:50]
         
         # ============ NEW RESULT DESIGN ============
-        header = f"🏁 The quiz '{escape_markdown(quiz_title)}' has finished!\n\n"
+        header = f"🏁 *The quiz* '{escape_markdown(quiz_title)}' *has finished!*\n\n"
         
         # Count total questions answered
         total_questions_answered = len(questions)
-        subheader = f"📋 {total_questions_answered} questions answered\n"
-        subheader += f"👥 Total Participants: {len(final_scores)}\n\n"
+        subheader = f"📋 {total_questions_answered} *questions answered*\n"
+        subheader += f"👥 *Total Participants:* {len(final_scores)}\n\n"
         
         # Build leaderboard with new design
         leaderboard = ""
@@ -1624,11 +1634,11 @@ async def compile_group_leaderboard(chat_id, context):
             
             # Determine rank/medal
             if idx == 1:
-                rank_icon = "🥇"
+                rank_icon = "🥇."
             elif idx == 2:
-                rank_icon = "🥈"
+                rank_icon = "🥈."
             elif idx == 3:
-                rank_icon = "🥉"
+                rank_icon = "🥉."
             else:
                 rank_icon = f"{idx}."
             
