@@ -109,7 +109,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Check for active quiz creation
         if check_active_quiz_creation(update.message.from_user.id, context):
             await update.message.reply_text(
-                "⚠️ You have an unfinished quiz. Please finish creating your quiz or send /cancel.\n\n"
+                "⚠️ **You have an unfinished quiz.** Please finish creating your quiz or send /cancel.\n\n"
                 "You cannot start a new quiz or use other commands until you complete this one."
             )
             return
@@ -140,7 +140,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🔥 **Description:** {escape_markdown(desc) if desc else 'No description'}\n"
                 f"🖊️ **Questions:** {total_q[0]}\n"
                 f"⏱ **Time per question:** {time_disp}\n\n"
-                "🏁 *Click 'I am ready!' to start the quiz.*"
+                "🏁 *Click 'I am ready!' to start the quiz.*\n"
+                "🏁 *The quiz will begin when at least 2 people are ready to play. Send /stop to stop it.*"
             )
             
             keyboard = [[InlineKeyboardButton("I am ready!  (0)", callback_data=f"ready_{quiz_id}")]]
@@ -179,7 +180,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         help_text = (
-            "📖 Help Menu\n\n"
+            "Help Menu\n\n"
             "Aap is bot se quizzes bana kar apne dosto ke sath groups me realtime khel sakte hain.\n\n"
             "💡 Available Commands:\n"
             "➤ /newquiz – Create a new quiz\n"
