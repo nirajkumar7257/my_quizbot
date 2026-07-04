@@ -1711,33 +1711,59 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query.query  # इसमें "quiz_123" जैसी ID आएगी
-    
-    if not query:
-        return
+async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """यूजर जब लिस्ट में से किसी क्विज़ को चुनेगा, तो यह ऑफिशियल लुक वाला पैनल दिखाएगा"""
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        # बटन के callback_data से quiz_id निकालें (जैसे viewq_12 में से 12)
+        quiz_id = int(query.data.split('_')[1])
+        
+        # 1. डेटाबेस से क्विज़ की डिटेल्स लें
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT title, timer FROM quizzes WHERE quiz_id = ?", (quiz_id,))
+        quiz_data = cursor.fetchone()
+        
+        if not quiz_data:
+            await query.message.reply_text("❌ यह क्विज़ नहीं मिला।")
+            conn.close()
+            return
+            
+        quiz_title, quiz_timer = quiz_data
+        
+        # 2. कुल प्रश्नों की संख्या गिनें
+        cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
+        question_count = cursor.fetchone()[0]
+        conn.close()
 
-    bot_info = await context.bot.get_me()
-    bot_username = bot_info.username
+        formatted_time = format_time(quiz_timer)
 
-    # चैट के अंदर दिखने वाला सुंदर "Start this Quiz" बटन
-    share_button = [[InlineKeyboardButton("Start this Quiz", url=f"https://t.me/{bot_username}?start={query}")]]
-    reply_markup = InlineKeyboardMarkup(share_button)
-
-    results = [
-        InlineQueryResultArticle(
-            id=str(query),
-            title="Share Quiz Bot",
-            description="इस क्विज़ को ग्रुप या दोस्त के साथ शेयर करने के लिए यहाँ क्लिक करें.",
-            input_message_content=InputTextMessageContent(
-                message_text=f"📊 *एक नया क्विज़ शेयर किया गया है!*\n\nनीचे दिए गए बटन पर क्लिक करके खेलना शुरू करें।",
-                parse_mode="Markdown"
-            ),
-            reply_markup=reply_markup
+        # 3. ऑफिशियल लुक वाला टेक्स्ट तैयार करें
+        quiz_text = (
+            f"🎲 Quiz \"⚙️ *{quiz_title}* ✨\n"
+            f" {{लल्लनटॉप प्रश्नोत्तरी}} [[ Based On All Comptative Exams ]] ⚙️\"\n"
+            f"📝 *{question_count} questions*  •  ⏱️ *{formatted_time}*"
         )
-    ]
+        
+        # 4. ऑफिशियल बॉट की तरह 3 बटन का सेट (Start, Group, Share)
+        keyboard = [
+            [InlineKeyboardButton("Start this quiz", callback_data=f"startprivate_{quiz_id}")],
+            [InlineKeyboardButton("Start quiz in group", switch_inline_query_current_chat=f"start_{quiz_id}")],
+            [InlineKeyboardButton("Share quiz", switch_inline_query=f"share_{quiz_id}")],
+            [InlineKeyboardButton("Back to List", callback_data="btn_viewquizzes")]
+        ]
+        
+        # पुराने मैसेज को नए शानदार लुक से बदलें
+        await query.edit_message_text(
+            text=quiz_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
 
-    await update.inline_query.answer(results, cache_time=5)
+    except Exception as e:
+        logging.error(f"Error in handle_view_quiz_callback: {e}")
     
 def main():
     if not BOT_TOKEN:
