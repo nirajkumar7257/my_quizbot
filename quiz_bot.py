@@ -295,7 +295,7 @@ async def receive_desc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         
         await update.message.reply_text(
-            f"Good. Your quiz '{context.user_data['quiz_build']['title']}' now has 0 questions. If you made a mistake, send /undo.\n\n"
+            f"Good. Your quiz '{context.user_data['quiz_build']['title']}' now has 0 questions.\n\n"
             "💡 Now send me a poll with your first question.\n\n"
             "Enable Quiz Mode, add 2-7 options, pick the correct one, and tap Create.\n\n"
             "Warning: this bot can't create anonymous poll\n"
@@ -551,7 +551,7 @@ async def view_my_quizzes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Build list with View buttons for each quiz - 2 buttons per row
-        text = "📚 Aapke Banaye Huye Quizzes:\n\n"
+        text = "📚 *Aapke Banaye Huye Quizzes:*\n\n"
         
         keyboard = []
         for idx, (qid, title, timer, q_count) in enumerate(rows, 1):
@@ -605,10 +605,10 @@ async def show_summary_panel(query, context, quiz_id):
         escaped_desc = escape_markdown(description) if description else "No description"
         
         summary_text = (
-            "👍 Here's your quiz:\n\n"
-            f"Title **{escaped_title}**\n"
-            f"**Description:** {escaped_desc}\n"
-            f"🎯 {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
+            "👍 *Here's your quiz:*\n\n"
+            f"💌 Title **{escaped_title}**\n"
+            f"🫥 **Description:** {escaped_desc}\n"
+            f"⚡ {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
             f"🔗 External sharing link:\n"
             f"`https://t.me/{bot_username}?start=quiz_{quiz_id}`"
         )
@@ -648,11 +648,11 @@ async def show_summary_panel_text(update, context, quiz_id):
         escaped_desc = escape_markdown(description) if description else "No description"
         
         summary_text = (
-            "👍 Quiz created successfully!\n\n"
-            "🏁 Here's your quiz:\n"
-            f"📚 **{escaped_title}**\n"
-            f"📝 **Description:** {escaped_desc}\n"
-            f"🙋‍♂️ {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
+            "👍 *Quiz created successfully!*\n\n"
+            "🏁 *Here's your quiz:*\n"
+            f"📒 **{escaped_title}**\n"
+            f"🫥 **Description:** {escaped_desc}\n"
+            f"⚡ {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
             f"🔗 External sharing link:\n"
             f"`https://t.me/{bot_username}?start=quiz_{quiz_id}`"
         )
@@ -867,7 +867,7 @@ async def show_question_detail_panel(query, context, quiz_id, question_id):
         detail_text = f"❓ **Question #{q_number}** (Current Status: Active)\n\n"
         detail_text += f"**Question Text:** {escape_markdown(q_text)}\n\n"
         
-        detail_text += "👉 **Options:**\n"
+        detail_text += "👇 Options:\n"
         for idx, opt in enumerate(options, 1):
             status = "✅" if opt == correct_ans else "❌"
             detail_text += f"• {status} {escape_markdown(opt)}"
@@ -875,25 +875,25 @@ async def show_question_detail_panel(query, context, quiz_id, question_id):
                 detail_text += " (Correct Answer)"
             detail_text += "\n"
         
-        detail_text += f"\n⏱️ **Timer:** 30 seconds\n"
+        detail_text += f"\n⏱️ Timer: 30 seconds\n"
         
         if pre_message:
-            detail_text += f"\nℹ️ **Pre-message:** {escape_markdown(pre_message)}\n"
+            detail_text += f"\n💌 Pre-message: {escape_markdown(pre_message)}\n"
         else:
-            detail_text += f"\nℹ️ **Pre-message:** None set\n"
+            detail_text += f"\n💌 Pre-message: None set\n"
         
         if explanation:
-            detail_text += f"\n📖 **Explanation:** {escape_markdown(explanation)}\n"
+            detail_text += f"\n📖 Explanation: {escape_markdown(explanation)}\n"
         else:
-            detail_text += f"\n📖 **Explanation:** None set\n"
+            detail_text += f"\n📖 Explanation: None set\n"
         
         # Build action buttons - 1 per row (ek ke niche ek)
         keyboard = [
-            [InlineKeyboardButton("✏️ Pre-message", callback_data=f"editpre_{quiz_id}_{q_id}")],
-            [InlineKeyboardButton("🖥️ Explanation", callback_data=f"editexpl_{quiz_id}_{q_id}")],
-            [InlineKeyboardButton("🗑️ Delete Question", callback_data=f"delq_{quiz_id}_{q_id}")],
-            [InlineKeyboardButton("🔄 Replace Question", callback_data=f"replaceq_{quiz_id}_{q_id}")],
-            [InlineKeyboardButton("🔙 Back to Questions List", callback_data=f"edquestion_{quiz_id}")]
+            [InlineKeyboardButton("Pre-message", callback_data=f"editpre_{quiz_id}_{q_id}")],
+            [InlineKeyboardButton("Explanation", callback_data=f"editexpl_{quiz_id}_{q_id}")],
+            [InlineKeyboardButton("Delete Question", callback_data=f"delq_{quiz_id}_{q_id}")],
+            [InlineKeyboardButton("Replace Question", callback_data=f"replaceq_{quiz_id}_{q_id}")],
+            [InlineKeyboardButton("Back to Questions List", callback_data=f"edquestion_{quiz_id}")]
         ]
         
         await query.edit_message_text(
@@ -1618,12 +1618,12 @@ async def compile_group_leaderboard(chat_id, context):
         sorted_scores = sorted(final_scores.items(), key=lambda item: (-item[1]["score"], item[1]["total_time"]))[:50]
         
         # ============ NEW RESULT DESIGN ============
-        header = f"🏁 *The quiz* '{escape_markdown(quiz_title)}' *has finished!*\n\n"
+        header = f"🏁 The quiz '{escape_markdown(quiz_title)}' has finished!\n\n"
         
         # Count total questions answered
         total_questions_answered = len(questions)
-        subheader = f"📋 {total_questions_answered} *questions answered*\n"
-        subheader += f"👥 *Total Participants:* {len(final_scores)}\n\n"
+        subheader = f"📋 {total_questions_answered} questions answered\n"
+        subheader += f"👥 Total Participants: {len(final_scores)}\n\n"
         
         # Build leaderboard with new design
         leaderboard = ""
