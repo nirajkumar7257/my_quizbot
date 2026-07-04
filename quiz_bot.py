@@ -3,6 +3,7 @@ import sqlite3
 import json
 import logging
 import asyncio
+import re
 import time
 from datetime import datetime
 from dotenv import load_dotenv
@@ -620,12 +621,19 @@ async def show_summary_panel(query, context, quiz_id):
             f"`https://t.me/{bot_username}?start=quiz_{quiz_id}`"
         )
         
+                # बाकी पुराना कोड ऊपर का वैसा ही रहेगा...
+        
+        # साफ़-सुथरी आईडी तैयार करना (ताकि कोई एक्स्ट्रा स्पेस या गड़बड़ न रहे)
+        clean_quiz_id = str(quiz_id).strip() 
+        
         inline_keyboard = [
-            [InlineKeyboardButton("Start quiz in Private Chat", callback_data=f"startprivate_{quiz_id}")],
-            [InlineKeyboardButton("Start quiz in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
-            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{quiz_id}")],
-            [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{quiz_id}")]
+            [InlineKeyboardButton("Start quiz in Private Chat", callback_data=f"startprivate_{clean_quiz_id}")],
+            [InlineKeyboardButton("Start quiz in Group", url=f"https://t.me{bot_username}?startgroup=quiz_{clean_quiz_id}")],
+            # यहाँ हमने clean_quiz_id का इस्तेमाल किया है
+            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{clean_quiz_id}")],
+            [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{clean_quiz_id}")]
         ]
+        
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         await query.message.reply_text(summary_text, reply_markup=reply_markup, parse_mode="Markdown")
     except Exception as e:
@@ -663,12 +671,19 @@ async def show_summary_panel_text(update, context, quiz_id):
             f"`https://t.me/{bot_username}?start=quiz_{quiz_id}`"
         )
         
+                # बाकी पुराना कोड ऊपर का वैसा ही रहेगा...
+        
+        # साफ़-सुथरी आईडी तैयार करना (ताकि कोई एक्स्ट्रा स्पेस या गड़बड़ न रहे)
+        clean_quiz_id = str(quiz_id).strip() 
+        
         inline_keyboard = [
-            [InlineKeyboardButton("Start Private Chat", callback_data=f"startprivate_{quiz_id}")],
-            [InlineKeyboardButton("Start Quiz in Group", url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}")],
-            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{quiz_id}")],
-            [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{quiz_id}")]
+            [InlineKeyboardButton("Start quiz in Private Chat", callback_data=f"startprivate_{clean_quiz_id}")],
+            [InlineKeyboardButton("Start quiz in Group", url=f"https://t.me{bot_username}?startgroup=quiz_{clean_quiz_id}")],
+            # यहाँ हमने clean_quiz_id का इस्तेमाल किया है
+            [InlineKeyboardButton("↗️ Share Quiz", switch_inline_query=f"quiz_{clean_quiz_id}")],
+            [InlineKeyboardButton("⚙️ Edit", callback_data=f"edit_{clean_quiz_id}")]
         ]
+        
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         await update.message.reply_text(summary_text, reply_markup=reply_markup, parse_mode="Markdown")
     except Exception as e:
@@ -1714,31 +1729,29 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        query = update.inline_query.query  # इसमें "quiz_2" आ रहा है
+        raw_query = update.inline_query.query
         
-        if not query:
-            quiz_id = "default"
-        else:
-            quiz_id = str(query).strip()
+        if not raw_query:
+            return
+
+        # 🚨 जादू यहाँ है: अगर आईडी में स्पेस या कोई अजीब कैरेक्टर होगा, तो यह उसे साफ कर देगा
+        # यह सिर्फ a-z, A-Z, 0-9 और _ को ही रहने देगा
+        clean_query = re.sub(r'[^a-zA-Z0-9_]', '', str(raw_query).strip())
 
         bot_info = await context.bot.get_me()
         bot_username = bot_info.username
 
-        # बिल्कुल साफ और सही URL स्ट्रक्चर
-        target_url = f"https://t.me{bot_username}?start={quiz_id}"
+        # बिल्कुल सटीक और क्लीन टेलीग्राम डीप-लिंक यूआरएल
+        target_url = f"https://t.me{bot_username}?start={clean_query}"
         
         share_button = [[InlineKeyboardButton("🚀 Start this Quiz", url=target_url)]]
         reply_markup = InlineKeyboardMarkup(share_button)
 
-        # 🚨 समाधान: यहाँ id को पूरी तरह यूनीक (Unique) कर दिया गया है
-        # 'quiz_2_1719876543' जैसा फॉर्मेट बनेगा, जिससे टेलीग्राम सर्वर कभी एरर नहीं देगा
-        unique_result_id = f"{quiz_id}_{int(time.time())}"
-
         results = [
             InlineQueryResultArticle(
-                id=unique_result_id,  # <-- यहाँ बदलाव किया गया है
+                id=f"q_{clean_query}_{int(time.time())}", # हमेशा यूनीक आईडी
                 title="🎯 Share Quiz Bot",
-                description=f"क्विज़ ({quiz_id}) को यहाँ शेयर करने के लिए क्लिक करें.",
+                description=f"क्विज़ ({clean_query}) को यहाँ शेयर करने के लिए क्लिक करें.",
                 input_message_content=InputTextMessageContent(
                     message_text=f"📊 *एक नया क्विज़ उपलब्ध है!*\n\nलाइव खेलने के लिए नीचे दिए गए बटन पर क्लिक करें।",
                     parse_mode="Markdown"
@@ -1747,13 +1760,11 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         ]
 
-        # cache_time=0 ताकि तुरंत नया रिजल्ट लोड हो
         await update.inline_query.answer(results, cache_time=0)
-        logging.info(f"Inline query successfully answered for quiz_id: {quiz_id}")
         
     except Exception as e:
         logging.error(f"Error in inline_query_handler: {e}")
-
+        
 def main():
     if not BOT_TOKEN:
         logging.error("BOT_TOKEN not found in environment variables!")
