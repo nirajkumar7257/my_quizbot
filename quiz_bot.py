@@ -1710,68 +1710,7 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ Error", show_alert=True)
         except Exception:
             pass
-
-async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """यूजर जब लिस्ट में से किसी क्विज़ को चुनेगा, तो यह ऑफिशियल लुक वाला पैनल दिखाएगा"""
-    try:
-        query = update.callback_query
-        await query.answer()
-        
-        # 🛠️ फिक्स: एरर से बचने के लिए चेक करें कि क्या सच में आईडी आ रही है
-        data_parts = query.data.split('_')
-        if len(data_parts) < 2 or not data_parts[1].isdigit():
-            await query.message.reply_text("❌ क्विज़ की आईडी सही नहीं है या डेटाबेस में समस्या है।")
-            logging.error(f"Invalid callback data received: {query.data}")
-            return
             
-        quiz_id = int(data_parts[1])
-        
-        # 1. डेटाबेस से क्विज़ की डिटेल्स लें
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT title, timer FROM quizzes WHERE quiz_id = ?", (quiz_id,))
-        quiz_data = cursor.fetchone()
-        
-        if not quiz_data:
-            await query.message.reply_text("❌ यह क्विज़ नहीं मिला।")
-            conn.close()
-            return
-            
-        quiz_title, quiz_timer = quiz_data
-        
-        # 2. कुल प्रश्नों की संख्या गिनें
-        cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
-        question_count = cursor.fetchone()[0] # <-- टुपल से सीधा नंबर निकालने के लिए [0] लगाया है
-        conn.close()
-
-        formatted_time = format_time(quiz_timer)
-
-        # 3. ऑफिशियल लुक वाला टेक्स्ट तैयार करें
-        quiz_text = (
-            f"🎲 Quiz \"⚙️ *{quiz_title}* ✨\n"
-            f" {{लल्लनटॉप प्रश्नोत्तरी}} [[ Based On All Comptative Exams ]] ⚙️\"\n\n"
-            f"📝 *{question_count} questions*  •  ⏱️ *{formatted_time}*"
-        )
-        
-        # 4. ऑफिशियल बॉट की तरह 3 बटन का सेट (Start, Group, Share)
-        keyboard = [
-            [InlineKeyboardButton("Start this quiz", callback_data=f"startprivate_{quiz_id}")],
-            [InlineKeyboardButton("Start quiz in group", switch_inline_query_current_chat=f"start_{quiz_id}")],
-            [InlineKeyboardButton("Share quiz", switch_inline_query=f"share_{quiz_id}")],
-            [InlineKeyboardButton("Back to List", callback_data="btn_viewquizzes")]
-        ]
-        
-        # पुराने मैसेज को नए शानदार लुक से बदलें
-        await query.edit_message_text(
-            text=quiz_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-
-    except Exception as e:
-        logging.error(f"Error in handle_view_quiz_callback: {e}")
-        
-    
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query.query  # इसमें "start_12" या "share_12" आएगा
     
