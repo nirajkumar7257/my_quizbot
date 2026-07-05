@@ -1710,55 +1710,112 @@ async def handle_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ Error", show_alert=True)
         except Exception:
             pass
-            
-# =====================================================================
-# INLINE QUERY HANDLER (इसे def main(): के ठीक पहले पेस्ट करें)
-# =====================================================================
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the inline query when user clicks 'Share Quiz' and selects a chat"""
+    """Handles inline queries to show clean quiz list or share a specific quiz"""
     query = update.inline_query.query.strip()
-    if not query:
-        return
+    user_id = update.inline_query.from_user.id
+    bot_username = context.bot.username if context.bot.username else "quiz_bot"
+    results = []
 
-    # Check agar query 'quiz_' se start ho rahi hai (Jaise: quiz_12)
-    if query.startswith("quiz_"):
-        quiz_id = query.replace("quiz_", "")
-        
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            # Quiz ki basic details fetch karein
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+
+        # CASE 1: Chat me sirf username type karne par short list dikhao
+        if not query:
+            cursor.execute(
+                "SELECT quiz_id, title, description, timer FROM quizzes WHERE creator_id = ? ORDER BY quiz_id DESC LIMIT 50", 
+                (user_id,)
+            )
+            user_quizzes = cursor.fetchall()
+            
+            if not user_quizzes:
+                results.append(
+                    InlineQueryResultArticle(
+                        id="no_quiz",
+                        title="❌ No Quizzes Found!",
+                        description="Aapne koi quiz nahi banaya hai.",
+                        input_message_content=InputTextMessageContent(
+                            message_text="Naya quiz banane ke liye bot me /newquiz likhein."
+                        )
+                    )
+                )
+            else:
+                for quiz in user_quizzes:
+                    quiz_id, title, description, timer = quiz
+                    
+                    cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
+                    total_q = cursor.fetchone()[0] # [0] se direct clean count integer milega
+                    
+                    time_display = f"{timer}s" if timer < 60 else f"{timer // 60}m"
+                    escaped_title = escape_markdown(title)
+                    escaped_desc = escape_markdown(description) if description else "No description"
+                    
+                    # Jab click karke chat me send karenge, tab ye full message layout jayega
+                    share_message_text = (
+                        "🏁 *Here's your quiz:*\n\n"
+                        f"📒 **Title:** {escaped_title}\n"
+                        f"🫥 **Description:** {escaped_desc}\n"
+                        f"⚡ {total_q} question(s) · ⏱ Time: {time_display}\n\n"
+                        f"👇 Click the buttons below to interact with this quiz!"
+                    )
+                    
+                    start_private_url = f"https://t.me{bot_username}?start=quiz_{quiz_id}"
+                    start_group_url = f"https://t.me{bot_username}?startgroup=quiz_{quiz_id}"
+                    
+                    inline_keyboard = [
+                        [InlineKeyboardButton("Start quiz in Private Chat", url=start_private_url)],
+                        [InlineKeyboardButton("Start quiz in Group", url=start_group_url)],
+                        [InlineKeyboardButton("Share Quiz", switch_inline_query=f"quiz_{quiz_id}")]
+                    ]
+                    
+                    # 🌟 SHORT POPUP DISPLAY FIXED (Sirf Title, Questions aur Timer dikhega)
+                    results.append(
+                        InlineQueryResultArticle(
+                            id=f"list_{quiz_id}",
+                            title=f"📊 {title}", # Popup me Main Heading
+                            description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}", # Popup me Choti Sub-heading (Short & Clean)
+                            input_message_content=InputTextMessageContent(
+                                message_text=share_message_text,
+                                parse_mode="Markdown"
+                            ),
+                            reply_markup=InlineKeyboardMarkup(inline_keyboard)
+                        )
+                    )
+            
+            conn.close()
+            await update.inline_query.answer(results, cache_time=1, is_personal=True)
+            return
+
+        # CASE 2: Single Quiz Share handler (`quiz_12` query trigger hone par)
+        if query.startswith("quiz_"):
+            quiz_id = query.replace("quiz_", "")
+            
             cursor.execute("SELECT title, description, timer FROM quizzes WHERE quiz_id = ?", (quiz_id,))
             quiz_data = cursor.fetchone()
             
             if quiz_data:
                 title, description, timer = quiz_data
-                # Total questions count fetch karein
                 cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
-                total_q = cursor.fetchone()
+                total_q = cursor.fetchone()[0]
                 conn.close()
 
-                time_display = f"{timer} sec" if timer < 60 else f"{timer // 60} min"
-                bot_username = context.bot.username if context.bot.username else "quiz_bot"
-                
+                time_display = f"{timer}s" if timer < 60 else f"{timer // 60}m"
                 escaped_title = escape_markdown(title)
                 escaped_desc = escape_markdown(description) if description else "No description"
                 
-                # --- PANEL TEXT DESIGN ---
                 share_message_text = (
                     "🏁 *Here's your quiz:*\n\n"
-                    f"📒 **Title: {escaped_title}**\n"
+                    f"📒 **Title:** {escaped_title}\n"
                     f"🫥 **Description:** {escaped_desc}\n"
-                    f"⚡ {total_q[0]} question(s) · ⏱ Time: {time_display}\n\n"
+                    f"⚡ {total_q} question(s) · ⏱ Time: {time_display}\n\n"
                     f"👇 Click the buttons below to interact with this quiz!"
                 )
                 
-                # --- DEEP-LINKING URLS FOR BUTTONS ---
                 start_private_url = f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
                 start_group_url = f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}"
                 
-                # --- BUTTONS STRUCTURE ---
                 inline_keyboard = [
                     [InlineKeyboardButton("Start quiz in Private Chat", url=start_private_url)],
                     [InlineKeyboardButton("Start quiz in Group", url=start_group_url)],
@@ -1769,7 +1826,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     InlineQueryResultArticle(
                         id=str(quiz_id),
                         title=f"📊 Share Quiz: {title}",
-                        description=f"{total_q[0]} Qs · {time_display} · {description if description else ''}",
+                        description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}",
                         input_message_content=InputTextMessageContent(
                             message_text=share_message_text,
                             parse_mode="Markdown"
@@ -1780,8 +1837,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 await update.inline_query.answer(results, cache_time=1)
             else:
                 conn.close()
-        except Exception as e:
-            logging.error(f"Error in inline_query_handler: {e}")
+                
+    except Exception as e:
+        logging.error(f"Error in inline_query_handler: {e}")
 
 # =====================================================================
 
