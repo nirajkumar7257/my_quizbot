@@ -1756,11 +1756,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     
                     # 🌟 FIX: List me se click karte hi ye text aur panel direct chat me share ho jayega
                     share_message_text = (
-                        "🏁 *Here's your quiz:*\n\n"
-                        f"📒 **Title:** {escaped_title}\n"
-                        f"🫥 **Description:** {escaped_desc}\n"
-                        f"⚡ {total_q} question(s) · ⏱ Time: {time_display}\n\n"
-                        f"👇 Click the buttons below to interact with this quiz!"
+                        f"🎲 Quiz {escaped_title}\n\n"
+                        f"💌 **Description:** {escaped_desc}\n"
+                        f"🖋️ {total_q} questions · ⏱ {time_display}"
                     )
                     
                     start_private_url = f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
@@ -1776,7 +1774,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     results.append(
                         InlineQueryResultArticle(
                             id=f"list_{quiz_id}",
-                            title=f"📊 {title}", 
+                            title=f"🎲 Quiz {title}", 
                             description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}", 
                             input_message_content=InputTextMessageContent(
                                 message_text=share_message_text,
@@ -1810,11 +1808,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 escaped_desc = escape_markdown(description) if description else "No description"
                 
                 share_message_text = (
-                    "🏁 *Here's your quiz:*\n\n"
-                    f"📒 **Title:** {escaped_title}\n"
-                    f"🫥 **Description:** {escaped_desc}\n"
-                    f"⚡ {total_q} question(s) · ⏱ Time: {time_display}\n\n"
-                    f"👇 Click the buttons below to interact with this quiz!"
+                        f"🎲 Quiz {escaped_title}\n\n"
+                        f"💌 **Description:** {escaped_desc}\n"
+                        f"🖋️ {total_q} questions · ⏱ {time_display}"
                 )
                 
                 start_private_url = f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
@@ -1829,7 +1825,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 results = [
                     InlineQueryResultArticle(
                         id=str(quiz_id),
-                        title=f"📊 Share Quiz: {title}",
+                        title=f"🎲 Quiz {title}",
                         description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}",
                         input_message_content=InputTextMessageContent(
                             message_text=share_message_text,
