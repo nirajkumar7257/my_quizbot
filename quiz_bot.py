@@ -1717,8 +1717,14 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
         query = update.callback_query
         await query.answer()
         
-        # बटन के callback_data से quiz_id निकालें (जैसे viewq_12 में से 12)
-        quiz_id = int(query.data.split('_')[0])
+        # 🛠️ फिक्स: एरर से बचने के लिए चेक करें कि क्या सच में आईडी आ रही है
+        data_parts = query.data.split('_')
+        if len(data_parts) < 2 or not data_parts[1].isdigit():
+            await query.message.reply_text("❌ क्विज़ की आईडी सही नहीं है या डेटाबेस में समस्या है।")
+            logging.error(f"Invalid callback data received: {query.data}")
+            return
+            
+        quiz_id = int(data_parts[1])
         
         # 1. डेटाबेस से क्विज़ की डिटेल्स लें
         conn = sqlite3.connect(DB_FILE)
@@ -1735,7 +1741,7 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
         
         # 2. कुल प्रश्नों की संख्या गिनें
         cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
-        question_count = cursor.fetchone()[0]
+        question_count = cursor.fetchone()[0] # <-- टुपल से सीधा नंबर निकालने के लिए [0] लगाया है
         conn.close()
 
         formatted_time = format_time(quiz_timer)
@@ -1743,7 +1749,7 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
         # 3. ऑफिशियल लुक वाला टेक्स्ट तैयार करें
         quiz_text = (
             f"🎲 Quiz \"⚙️ *{quiz_title}* ✨\n"
-            f" {{लल्लनटॉप प्रश्नोत्तरी}} [[ Based On All Comptative Exams ]] ⚙️\"\n"
+            f" {{लल्लनटॉप प्रश्नोत्तरी}} [[ Based On All Comptative Exams ]] ⚙️\"\n\n"
             f"📝 *{question_count} questions*  •  ⏱️ *{formatted_time}*"
         )
         
@@ -1764,6 +1770,7 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
 
     except Exception as e:
         logging.error(f"Error in handle_view_quiz_callback: {e}")
+        
     
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query.query  # इसमें "start_12" या "share_12" आएगा
