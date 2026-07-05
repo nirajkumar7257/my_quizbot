@@ -1718,7 +1718,7 @@ async def handle_view_quiz_callback(update: Update, context: ContextTypes.DEFAUL
         await query.answer()
         
         # बटन के callback_data से quiz_id निकालें (जैसे viewq_12 में से 12)
-        quiz_id = int(query.data.split('_')[1])
+        quiz_id = int(query.data.split('_')[0])
         
         # 1. डेटाबेस से क्विज़ की डिटेल्स लें
         conn = sqlite3.connect(DB_FILE)
