@@ -1722,7 +1722,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
 
-        # CASE 1: Chat me sirf username type karne par short list dikhao
+        # CASE 1: Chat me sirf username type karne par short list dikhao (Empty query)
         if not query:
             cursor.execute(
                 "SELECT quiz_id, title, description, timer FROM quizzes WHERE creator_id = ? ORDER BY quiz_id DESC LIMIT 50", 
@@ -1737,7 +1737,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                         title="❌ No Quizzes Found!",
                         description="Aapne koi quiz nahi banaya hai.",
                         input_message_content=InputTextMessageContent(
-                            message_text="Naya quiz banane ke liye bot me /newquiz likhein."
+                            message_text="Aapne abhi tak koi quiz nahi banaya hai. Naya quiz banane ke liye bot me /newquiz likhein."
                         )
                     )
                 )
@@ -1745,14 +1745,16 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 for quiz in user_quizzes:
                     quiz_id, title, description, timer = quiz
                     
+                    # Total questions count fetch karein
                     cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
-                    total_q = cursor.fetchone()[0] # [0] se direct clean count integer milega
+                    count_data = cursor.fetchone()
+                    total_q = count_data[0] if count_data else 0
                     
                     time_display = f"{timer}s" if timer < 60 else f"{timer // 60}m"
                     escaped_title = escape_markdown(title)
                     escaped_desc = escape_markdown(description) if description else "No description"
                     
-                    # Jab click karke chat me send karenge, tab ye full message layout jayega
+                    # 🌟 FIX: List me se click karte hi ye text aur panel direct chat me share ho jayega
                     share_message_text = (
                         "🏁 *Here's your quiz:*\n\n"
                         f"📒 **Title:** {escaped_title}\n"
@@ -1761,8 +1763,8 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                         f"👇 Click the buttons below to interact with this quiz!"
                     )
                     
-                    start_private_url = f"https://t.me{bot_username}?start=quiz_{quiz_id}"
-                    start_group_url = f"https://t.me{bot_username}?startgroup=quiz_{quiz_id}"
+                    start_private_url = f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
+                    start_group_url = f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}"
                     
                     inline_keyboard = [
                         [InlineKeyboardButton("Start quiz in Private Chat", url=start_private_url)],
@@ -1770,12 +1772,12 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                         [InlineKeyboardButton("Share Quiz", switch_inline_query=f"quiz_{quiz_id}")]
                     ]
                     
-                    # 🌟 SHORT POPUP DISPLAY FIXED (Sirf Title, Questions aur Timer dikhega)
+                    # Short Display Popup for List
                     results.append(
                         InlineQueryResultArticle(
                             id=f"list_{quiz_id}",
-                            title=f"📊 {title}", # Popup me Main Heading
-                            description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}", # Popup me Choti Sub-heading (Short & Clean)
+                            title=f"📊 {title}", 
+                            description=f"⚡ {total_q} Qs   ·   ⏱ {time_display}", 
                             input_message_content=InputTextMessageContent(
                                 message_text=share_message_text,
                                 parse_mode="Markdown"
@@ -1785,7 +1787,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     )
             
             conn.close()
-            await update.inline_query.answer(results, cache_time=1, is_personal=True)
+            await update.inline_query.answer(results, cache_time=0, is_personal=True)
             return
 
         # CASE 2: Single Quiz Share handler (`quiz_12` query trigger hone par)
@@ -1797,8 +1799,10 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             
             if quiz_data:
                 title, description, timer = quiz_data
+                
                 cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = ?", (quiz_id,))
-                total_q = cursor.fetchone()[0]
+                count_data = cursor.fetchone()
+                total_q = count_data[0] if count_data else 0
                 conn.close()
 
                 time_display = f"{timer}s" if timer < 60 else f"{timer // 60}m"
@@ -1834,7 +1838,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                         reply_markup=InlineKeyboardMarkup(inline_keyboard)
                     )
                 ]
-                await update.inline_query.answer(results, cache_time=1)
+                await update.inline_query.answer(results, cache_time=0)
             else:
                 conn.close()
                 
