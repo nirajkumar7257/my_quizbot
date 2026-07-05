@@ -1847,6 +1847,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # =====================================================================
 
+
 def main():
     if not BOT_TOKEN:
         logging.error("BOT_TOKEN not found in environment variables!")
