@@ -1755,8 +1755,8 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 
                 # --- DEEP-LINKING URLS FOR BUTTONS ---
-                start_private_url = f"https://t.me{bot_username}?start=quiz_{quiz_id}"
-                start_group_url = f"https://t.me{bot_username}?startgroup=quiz_{quiz_id}"
+                start_private_url = f"https://t.me/{bot_username}?start=quiz_{quiz_id}"
+                start_group_url = f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}"
                 
                 # --- BUTTONS STRUCTURE ---
                 inline_keyboard = [
