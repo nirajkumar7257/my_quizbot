@@ -225,8 +225,14 @@ class QuizAutoRunner:
                 # Import the quiz sending function
                 from quizbot import send_next_group_poll
                 
-                # 🔥 FIX: Create task instead of await
-                asyncio.create_task(send_next_group_poll(self.support_group_id, self.context))
+                # 🔥 FIXED: Ensure game is in GROUP_GAMES before calling send_next_group_poll
+                if self.support_group_id in self.GROUP_GAMES:
+                    # Direct await करें ताकि सवाल भेजे जाएं और game state maintain रहे
+                    self.logger.info(f"📤 Sending first question for quiz {quiz_id}...")
+                    await send_next_group_poll(self.support_group_id, self.context)
+                else:
+                    self.logger.error(f"❌ Game not found in GROUP_GAMES for {self.support_group_id}")
+                    return False
                 
             self.logger.info(f"✅ Quiz {quiz_id} auto-run started")
             return True
