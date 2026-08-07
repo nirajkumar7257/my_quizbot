@@ -2800,8 +2800,10 @@ async def execute_broadcast_callback(update: Update, context: ContextTypes.DEFAU
         await context.bot.send_message(chat_id=query.message.chat.id, text=report_text, parse_mode="Markdown")
 
 # ------------------ Autorun helpers ------------------
-async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
-    """Background loop: post the quiz setup panel in SUPPORT_GROUP_ID every interval."""
+# ------------------ Autorun helpers (auto-start variant) ------------------
+async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
+    """Background loop: post the quiz setup panel in SUPPORT_GROUP_ID every interval,
+       wait a bit, then optionally auto-start the quiz in that group."""
     try:
         while True:
             # Check DB active flag
@@ -2824,12 +2826,12 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
             db_neg_val = negative_value if negative_value is not None else 0.0
 
             init_text = (
-                f"🎲 *Get ready for the quiz!*\n\n"
-                f"📚 *Title:* {escape_markdown(title)}\n"
-                f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\n"
-                f"⏱ *Time per question:* {time_disp}\n"
-                f"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\n\n"
-                "🏁 *Click 'I am ready!' to start the quiz.*\n"
+                f"🎲 *Get ready for the quiz!*\\n\\n"
+                f"📚 *Title:* {escape_markdown(title)}\\n"
+                f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\\n"
+                f"⏱ *Time per question:* {time_disp}\\n"
+                f"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\\n\\n"
+                "🏁 *Click 'I am ready!' to start the quiz.*\\n"
                 "🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*"
             )
 
@@ -2840,6 +2842,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
             }
             kb = [[raw_button]]
 
+            sent = None
             try:
                 sent = await app.bot.send_message(
                     chat_id=SUPPORT_GROUP_ID,
@@ -2862,22 +2865,59 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
                 cur.execute("UPDATE autoruns SET next_run = ? WHERE id = ?", (next_ts, autorun_id))
                 conn.commit()
 
+            # Wait before deciding to auto-start
+            try:
+                await asyncio.sleep(wait_before_start)
+            except asyncio.CancelledError:
+                logging.info(f"Autorun worker {autorun_id} cancelled during wait")
+                return
+
+            # Decide whether to auto-start
+            try:
+                game = GROUP_GAMES.get(SUPPORT_GROUP_ID, {})
+                ready_users = game.get("ready_users", set()) if isinstance(game.get("ready_users", None), set) else set(game.get("ready_users", []))
+                ready_count = len(ready_users)
+
+                if force_start or ready_count >= min_players_required:
+                    # Initialize game state if not present or reset for this autorun
+                    GROUP_GAMES[SUPPORT_GROUP_ID] = {
+                        "quiz_id": quiz_id,
+                        "joined_users": {}, 
+                        "current_q": 0,
+                        "scores": {},
+                        "poll_map": {},
+                        "start_time": None,
+                        "user_answers": {},
+                        "question_start_times": {},
+                        "ready_users": set(ready_users),  # preserve any who clicked
+                        "quiz_started": True,
+                        "poll_message_ids": {},
+                        "setup_message_id": sent.message_id if sent else None,
+                        "is_private": False,
+                        "quiz_paused": False,
+                        "consecutive_no_answers": 0
+                    }
+                    logging.info(f"Autorun {autorun_id}: auto-starting quiz {quiz_id} in support group (ready={ready_count})")
+                    # Start sending questions
+                    asyncio.create_task(send_next_group_poll(SUPPORT_GROUP_ID, app))
+                else:
+                    logging.info(f"Autorun {autorun_id}: not enough ready users ({ready_count}) — skipping auto-start")
+            except Exception as e:
+                logging.error(f"Autorun {autorun_id}: error during auto-start check: {e}")
+
             # Sleep until next run
             await asyncio.sleep(interval_minutes * 60)
     except asyncio.CancelledError:
         logging.info(f"Autorun worker {autorun_id} cancelled")
     except Exception as e:
         logging.error(f"Error in autorun_worker {autorun_id}: {e}")
+# ---------------- end autorun helpers ------------------
 
-
-def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes):
-    """Create and register an asyncio task for the autorun loop."""
+def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
     if autorun_id in AUTORUN_TASKS and not AUTORUN_TASKS[autorun_id].done():
         return
-    task = asyncio.create_task(autorun_worker(app, autorun_id, quiz_id, interval_minutes))
+    task = asyncio.create_task(autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before_start, min_players_required, force_start))
     AUTORUN_TASKS[autorun_id] = task
-    logging.info(f"Scheduled autorun {autorun_id} for quiz {quiz_id} every {interval_minutes}min")
-
 
 def cancel_autorun_task(autorun_id):
     """Cancel and remove a running autorun task."""
