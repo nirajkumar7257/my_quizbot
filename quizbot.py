@@ -1588,7 +1588,6 @@ async def save_edited_negative(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==========================================
 # 🎯 SINGLE READY BUTTON DRIVEN ACTIVATION
 # ==========================================
-
 async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Auto-joins users and sets dynamic counter to verify activation benchmarks"""
     try:
@@ -1597,7 +1596,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
         message_id = query.message.message_id
         user_id = query.from_user.id
         user_name = query.from_user.username if query.from_user.username else query.from_user.first_name
-        
+
         # FIX 1 & 4: Safe string check aur parsing (Type Mismatch se bachne ke liye)
         parts = query.data.split("_")
         if len(parts) < 2:
@@ -1606,7 +1605,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception:
                 pass
             return
-            
+
         try:
             quiz_id = int(parts[1])
         except ValueError:
@@ -1615,13 +1614,13 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception:
                 pass
             return
-        
+
         # 🌟 FIX (Bug #6): Quiz IDs ko string ke bajaye integers me comparison kiya taaki purana data properly clean ho
         if chat_id in GROUP_GAMES:
             old_game = GROUP_GAMES[chat_id]
             try:
                 old_quiz_id = int(old_game.get("quiz_id", 0))
-            except ValueError:
+            except Exception:
                 old_quiz_id = 0
 
             if old_game.get("quiz_paused") or old_quiz_id != quiz_id:
@@ -1630,15 +1629,15 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if chat_id not in GROUP_GAMES:
             GROUP_GAMES[chat_id] = {
-                "quiz_id": quiz_id, 
-                "joined_users": {}, 
-                "current_q": 0, 
-                "scores": {}, 
-                "poll_map": {}, 
+                "quiz_id": quiz_id,
+                "joined_users": {},
+                "current_q": 0,
+                "scores": {},
+                "poll_map": {},
                 "start_time": None,
-                "user_answers": {},  
+                "user_answers": {},
                 "question_start_times": {},
-                "ready_users": set(),  
+                "ready_users": set(),
                 "quiz_started": False,
                 "poll_message_ids": {},
                 "setup_message_id": message_id,
@@ -1652,8 +1651,21 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if GROUP_GAMES[chat_id].get("setup_message_id") is None:
                 GROUP_GAMES[chat_id]["setup_message_id"] = message_id
                 GROUP_GAMES[chat_id]["setup_panel_text"] = query.message.text
-            
+
         game = GROUP_GAMES[chat_id]
+
+        # Ensure required structures exist so callbacks from autorun-posted panel don't fail
+        game.setdefault("joined_users", {})
+        game.setdefault("scores", {})
+        game.setdefault("user_answers", {})
+        game.setdefault("ready_users", set())
+        game.setdefault("poll_map", {})
+        game.setdefault("poll_message_ids", {})
+        game.setdefault("question_start_times", {})
+        game.setdefault("start_time", None)
+        game.setdefault("quiz_started", False)
+        game.setdefault("quiz_paused", False)
+        game.setdefault("consecutive_no_answers", 0)
 
         # 🚀 ANTI-ERROR MULTI-USER BYPASS:
         # Agar countdown chal raha hai, toh users ko error dene ke bajaye silently group me add karein
@@ -1691,16 +1703,16 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # 🌟 FIX (Bug #5 Race Condition): State trigger ke badalte hi execution duplicate prevent check lagaya
         if ready_count >= min_ready_required and not game.get("quiz_started"):
             game["quiz_started"] = True
-            
+
             await query.answer("🎯 Target achieved! Quiz start ho rahi hai...")
-            
+
             # Only edit button, keep panel message same
             keyboard = []  # No button - just empty
             try:
                 await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
             except Exception:
                 pass
-            
+
             # Send countdown messages instead of editing the setup message
             for count in ["🎲 The quiz is about to begin…", "3️⃣....", "2️⃣Ready...", "1️⃣ SET…", "Go..🚀"]:
                 countdown_msg = await context.bot.send_message(chat_id=chat_id, text=count)
@@ -1717,9 +1729,9 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await context.bot.delete_message(chat_id=chat_id, message_id=banner_msg.message_id)
             except Exception as e:
                 logging.warning(f"Could not delete banner message: {e}")
-            
+
             game["current_q"] = 0
-            
+
             # 🌟 DOUBLE CHECK STATE AFTER SLEEP LOOP: Kisi aur concurrent query ne start toh nahi kiya?
             if game.get("current_q") == 0:
                 asyncio.create_task(send_next_group_poll(chat_id, context))
@@ -1730,20 +1742,17 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
 
             # 🌟 FIX: Library wrapper ko bypass karne ke liye raw dict format use kiya jo green colour update ko block karega
-            raw_live_ready_btn = {
-                "text": f"I am ready!  ({ready_count})",
-                "callback_data": f"ready_{quiz_id}",
-                "style": "success"  # Locks Green color on dynamic dynamic state mutations
-            }
+            # NOTE: We now use InlineKeyboardButton; keep simple label update
+            raw_live_ready_btn = InlineKeyboardButton(text=f"I am ready!  ({ready_count})", callback_data=f"ready_{quiz_id}")
             keyboard = [[raw_live_ready_btn]]
-            
+
             # EDIT ONLY THE BUTTON, NOT THE WHOLE MESSAGE
             try:
                 await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
             except Exception:
                 pass
             await query.answer("Aapne confirmation register kar di! 👍")
-            
+
     except Exception as e:
         logging.error(f"Error in handle_ready_click: {e}")
         try:
@@ -1751,7 +1760,6 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             pass
             
-                
 async def handle_pause_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle quiz pause resume"""
     try:
@@ -2796,7 +2804,6 @@ async def execute_broadcast_callback(update: Update, context: ContextTypes.DEFAU
         await context.bot.send_message(chat_id=query.message.chat.id, text=report_text, parse_mode="Markdown")
 
 # ------------------ Autorun helpers ------------------
-# ------------------ Autorun helpers (auto-start variant) ------------------
 async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
     """Background loop: post the quiz setup panel in SUPPORT_GROUP_ID every interval,
        wait a bit, then optionally auto-start the quiz in that group."""
@@ -2831,26 +2838,40 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                 "🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*"
             )
 
-            raw_button = {
-                "text": "I am ready!  (0)",
-                "callback_data": f"ready_{quiz_id}",
-                "style": "primary"
-            }
-            kb = [[raw_button]]
+            # Use InlineKeyboardButton and ensure consistent in-memory game state
+            button = InlineKeyboardButton("I am ready!  (0)", callback_data=f"ready_{quiz_id}")
+            kb = InlineKeyboardMarkup([[button]])
 
             sent = None
             try:
                 sent = await app.bot.send_message(
                     chat_id=SUPPORT_GROUP_ID,
                     text=init_text,
-                    reply_markup=InlineKeyboardMarkup(kb),
+                    reply_markup=kb,
                     parse_mode="Markdown"
                 )
-                # Track last setup message for support group
+                # Ensure a full game state exists for autorun-posted panel so ready clicks work
                 if SUPPORT_GROUP_ID not in GROUP_GAMES:
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {}
-                GROUP_GAMES[SUPPORT_GROUP_ID]["setup_message_id"] = sent.message_id
-                GROUP_GAMES[SUPPORT_GROUP_ID]["quiz_id"] = quiz_id
+
+                GROUP_GAMES[SUPPORT_GROUP_ID].update({
+                    "quiz_id": quiz_id,
+                    "setup_message_id": sent.message_id if sent else None,
+                    "setup_panel_text": init_text,
+                    "joined_users": {},
+                    "scores": {},
+                    "poll_map": {},
+                    "start_time": None,
+                    "user_answers": {},
+                    "question_start_times": {},
+                    "ready_users": set(),
+                    "quiz_started": False,
+                    "poll_message_ids": {},
+                    "is_private": False,
+                    "quiz_paused": False,
+                    "consecutive_no_answers": 0
+                })
+                logging.info(f"Autorun {autorun_id}: posted setup panel in support group (msg={sent.message_id})")
             except Exception as e:
                 logging.error(f"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}")
 
@@ -2878,7 +2899,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                     # Initialize game state if not present or reset for this autorun
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {
                         "quiz_id": quiz_id,
-                        "joined_users": {}, 
+                        "joined_users": {},
                         "current_q": 0,
                         "scores": {},
                         "poll_map": {},
@@ -2907,8 +2928,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
         logging.info(f"Autorun worker {autorun_id} cancelled")
     except Exception as e:
         logging.error(f"Error in autorun_worker {autorun_id}: {e}")
-# ---------------- end autorun helpers ------------------
-
+        
 def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
     if autorun_id in AUTORUN_TASKS and not AUTORUN_TASKS[autorun_id].done():
         return
