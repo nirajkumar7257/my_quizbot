@@ -2902,93 +2902,92 @@ async def load_autoruns_on_startup(app):
 # ---------------- end autorun helpers ------------------
 
 async def autorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    \"\"\"Owner-only: /autorun <quiz_id> <interval_minutes?> — schedule posting in SUPPORT_GROUP_ID.\"\"\"
+    """Owner-only: /autorun <quiz_id> <interval_minutes?> — schedule posting in SUPPORT_GROUP_ID."""
     try:
         if OWNER_ID is None or update.message.from_user.id != OWNER_ID:
-            await update.message.reply_text(\"❌ Unauthorized\")
+            await update.message.reply_text("❌ Unauthorized")
             return
         if not SUPPORT_GROUP_ID:
-            await update.message.reply_text(\"❌ SUPPORT_GROUP_ID not configured in .env\")
+            await update.message.reply_text("❌ SUPPORT_GROUP_ID not configured in .env")
             return
         args = context.args or []
         if len(args) < 1:
-            await update.message.reply_text(\"Usage: /autorun <quiz_id> <interval_minutes (default 60)>\")
+            await update.message.reply_text("Usage: /autorun <quiz_id> <interval_minutes (default 60)>")
             return
         try:
             quiz_id = int(args[0])
         except ValueError:
-            await update.message.reply_text(\"Invalid quiz_id\")
+            await update.message.reply_text("Invalid quiz_id")
             return
         interval = int(args[1]) if len(args) > 1 else 60
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            cur.execute(\"SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1\", (quiz_id,))
+            cur.execute("SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1", (quiz_id,))
             row = cur.fetchone()
             if row:
                 autorun_id = row[0]
-                cur.execute(\"UPDATE autoruns SET interval_minutes = ? WHERE id = ?\", (interval, autorun_id))
+                cur.execute("UPDATE autoruns SET interval_minutes = ? WHERE id = ?", (interval, autorun_id))
             else:
-                cur.execute(\"INSERT INTO autoruns (quiz_id, interval_minutes) VALUES (?, ?)\", (quiz_id, interval))
+                cur.execute("INSERT INTO autoruns (quiz_id, interval_minutes) VALUES (?, ?)", (quiz_id, interval))
                 autorun_id = cur.lastrowid
             conn.commit()
         # schedule task
         schedule_autorun_task(context.application, autorun_id, quiz_id, interval)
-        await update.message.reply_text(f\"✅ Autorun scheduled: quiz {quiz_id} every {interval} minutes (id={autorun_id})\")
+        await update.message.reply_text(f"✅ Autorun scheduled: quiz {quiz_id} every {interval} minutes (id={autorun_id})")
     except Exception as e:
-        logging.error(f\"Error in autorun_command: {e}\")
-        await update.message.reply_text(\"❌ Error scheduling autorun\")
+        logging.error(f"Error in autorun_command: {e}")
+        await update.message.reply_text("❌ Error scheduling autorun")
 
 
 async def stopautorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    \"\"\"Owner-only: /stopautorun <autorun_id|quiz_id|all>\"\"\"
+    """Owner-only: /stopautorun <autorun_id|quiz_id|all>"""
     try:
         if OWNER_ID is None or update.message.from_user.id != OWNER_ID:
-            await update.message.reply_text(\"❌ Unauthorized\")
+            await update.message.reply_text("❌ Unauthorized")
             return
         args = context.args or []
         if not args:
-            await update.message.reply_text(\"Usage: /stopautorun <autorun_id|quiz_id|all>\")
+            await update.message.reply_text("Usage: /stopautorun <autorun_id|quiz_id|all>")
             return
         key = args[0].lower()
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            if key == \"all\":
-                cur.execute(\"UPDATE autoruns SET active = 0 WHERE active = 1\")
+            if key == "all":
+                cur.execute("UPDATE autoruns SET active = 0 WHERE active = 1")
                 conn.commit()
                 for aid in list(AUTORUN_TASKS.keys()):
                     cancel_autorun_task(aid)
-                await update.message.reply_text(\"✅ All autoruns stopped.\")
+                await update.message.reply_text("✅ All autoruns stopped.")
                 return
             # try interpret as autorun id
             try:
                 aid = int(key)
-                cur.execute(\"UPDATE autoruns SET active = 0 WHERE id = ?\", (aid,))
+                cur.execute("UPDATE autoruns SET active = 0 WHERE id = ?", (aid,))
                 conn.commit()
                 cancel_autorun_task(aid)
-                await update.message.reply_text(f\"✅ Autorun {aid} stopped.\")
+                await update.message.reply_text(f"✅ Autorun {aid} stopped.")
                 return
             except ValueError:
                 # treat as quiz_id
                 try:
                     qid = int(key)
-                    cur.execute(\"SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1\", (qid,))
+                    cur.execute("SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1", (qid,))
                     rows = cur.fetchall()
                     if not rows:
-                        await update.message.reply_text(\"No active autorun found for that quiz.\")
+                        await update.message.reply_text("No active autorun found for that quiz.")
                         return
                     for (aid,) in rows:
-                        cur.execute(\"UPDATE autoruns SET active = 0 WHERE id = ?\", (aid,))
+                        cur.execute("UPDATE autoruns SET active = 0 WHERE id = ?", (aid,))
                         cancel_autorun_task(aid)
                     conn.commit()
-                    await update.message.reply_text(f\"✅ Stopped {len(rows)} autorun(s) for quiz {qid}.\")
+                    await update.message.reply_text(f"✅ Stopped {len(rows)} autorun(s) for quiz {qid}.")
                     return
                 except ValueError:
-                    await update.message.reply_text(\"Invalid parameter.\")
+                    await update.message.reply_text("Invalid parameter.")
                     return
     except Exception as e:
-        logging.error(f\"Error in stopautorun_command: {e}\")
-        await update.message.reply_text(\"❌ Error stopping autorun\")
-
+        logging.error(f"Error in stopautorun_command: {e}")
+        await update.message.reply_text("❌ Error stopping autorun")
         
 # 🔥 NEW AUTO-RUNNER STATUS COMMAND
 async def auto_runner_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
