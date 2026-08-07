@@ -98,6 +98,16 @@ def init_db():
         """)
         cursor.execute("CREATE TABLE IF NOT EXISTS broadcast_users (chat_id INTEGER PRIMARY KEY)")
         cursor.execute("CREATE TABLE IF NOT EXISTS broadcast_groups (chat_id INTEGER PRIMARY KEY)")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS autoruns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                quiz_id INTEGER NOT NULL,
+                interval_minutes INTEGER NOT NULL,
+                next_run TEXT,
+                active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         conn.commit()
         conn.close()
         logging.info("Database initialized successfully with negative_value column")
