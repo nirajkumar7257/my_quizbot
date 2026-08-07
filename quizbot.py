@@ -2835,7 +2835,8 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
             db_neg_val = negative_value if negative_value is not None else 0.0
 
             init_text = (
-                f"🎲 *Get ready for the quiz!*\n\n"
+                f"🎮 *LIVE QUIZ STARTING NOW!*\n\n"
+                f"*Get ready for the quiz!*\n"
                 f"📚 *Title:* {escape_markdown(title)}\n"
                 f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\n"
                 f"⏱ *Time per question:* {time_disp}\n"
