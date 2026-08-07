@@ -264,9 +264,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # 🌟 FIX: Raw dictionary payload use kiya button ko Green colour dene ke liye
                 raw_button = {
-                    "text": "I am ready!  (0)",
+                    "text": "I am ready!",
                     "callback_data": f"ready_{quiz_id}",
-                    "style": "primary"  # Hara (Green) rang lagane ke liye
+                    "style": "success"  # Hara (Green) rang lagane ke liye
                 }
                 kb = [[raw_button]]
                 
