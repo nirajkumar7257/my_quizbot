@@ -4,7 +4,7 @@ import json
 import logging
 import random
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, 
@@ -38,7 +38,8 @@ GROUP_GAMES = {}
 
 # Auto-runner instance (will be initialized in main)
 AUTO_RUNNER = None
-
+# In-memory map for autorun asyncio tasks: key = autorun_id, value = asyncio.Task
+AUTORUN_TASKS = {}
 # ====================================================================
 # 🔥 FULLY OPERATIONAL GLOBAL CONVERSATION STATES (AUTOMATIC NO-OVERLAP SEQUENCE)
 # ====================================================================
