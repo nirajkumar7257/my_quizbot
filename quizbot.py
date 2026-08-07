@@ -244,6 +244,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 time_disp = f"{timer} sec" if timer < 60 else f"{timer // 60} min"
                 db_neg_val = negative_value if negative_value is not None else 0.0
                 
+                # NEW CHECK: Agar iss group me quiz already chal rahi ho toh naya panel na post karein
+                if not is_private and chat_id in GROUP_GAMES and GROUP_GAMES[chat_id].get("quiz_started"):
+                    await update.message.reply_text(
+                        "⚠️ A quiz is already running in this group. Please use /stop or wait for the current quiz results before starting a new quiz."
+                    )
+                    return
+
                 init_text = (
                     f"🎲 *Get ready for the quiz!*\n\n"
                     f"📚 *Title:* {escape_markdown(title)}\n"
@@ -320,8 +327,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Error in start: {e}", exc_info=True)  
         await update.message.reply_text("❌ An error occurred. Please try again with /start")
-                    
-
+        
 # Help command Handel
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -2837,6 +2843,19 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                 "🏁 *Click 'I am ready!' to start the quiz.*\n"
                 "🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*"
             )
+
+            # Skip posting if a quiz is already running in the support group
+            if SUPPORT_GROUP_ID in GROUP_GAMES and GROUP_GAMES[SUPPORT_GROUP_ID].get("quiz_started"):
+                logging.info(f"Autorun {autorun_id}: skipping post because a quiz is already running in support group")
+                # update next_run anyway
+                next_ts = (datetime.utcnow() + timedelta(minutes=interval_minutes)).isoformat()
+                with sqlite3.connect(DB_FILE) as conn:
+                    cur = conn.cursor()
+                    cur.execute("UPDATE autoruns SET next_run = ? WHERE id = ?", (next_ts, autorun_id))
+                    conn.commit()
+                # wait until next scheduled run
+                await asyncio.sleep(interval_minutes * 60)
+                continue
 
             # Use InlineKeyboardButton and ensure consistent in-memory game state
             button = InlineKeyboardButton("I am ready!", callback_data=f"ready_{quiz_id}")
