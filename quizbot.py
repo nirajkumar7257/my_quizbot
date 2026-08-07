@@ -2820,23 +2820,23 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
                 break
 
             title, desc, timer, negative_value = quiz
-            time_disp = f\"{timer} sec\" if timer < 60 else f\"{timer // 60} min\"
+            time_disp = f"{timer} sec" if timer < 60 else f"{timer // 60} min"
             db_neg_val = negative_value if negative_value is not None else 0.0
 
             init_text = (
-                f\"🎲 *Get ready for the quiz!*\\n\\n\"
-                f\"📚 *Title:* {escape_markdown(title)}\\n\"
-                f\"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\\n\"
-                f\"⏱ *Time per question:* {time_disp}\\n\"
-                f\"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\\n\\n\"
-                \"🏁 *Click 'I am ready!' to start the quiz.*\\n\"
-                \"🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*\"
+                f"🎲 *Get ready for the quiz!*\n\n"
+                f"📚 *Title:* {escape_markdown(title)}\n"
+                f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\n"
+                f"⏱ *Time per question:* {time_disp}\n"
+                f"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\n\n"
+                "🏁 *Click 'I am ready!' to start the quiz.*\n"
+                "🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*"
             )
 
             raw_button = {
-                \"text\": \"I am ready!  (0)\",
-                \"callback_data\": f\"ready_{quiz_id}\",
-                \"style\": \"primary\"
+                "text": "I am ready!  (0)",
+                "callback_data": f"ready_{quiz_id}",
+                "style": "primary"
             }
             kb = [[raw_button]]
 
@@ -2845,29 +2845,29 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
                     chat_id=SUPPORT_GROUP_ID,
                     text=init_text,
                     reply_markup=InlineKeyboardMarkup(kb),
-                    parse_mode=\"Markdown\"
+                    parse_mode="Markdown"
                 )
                 # Track last setup message for support group
                 if SUPPORT_GROUP_ID not in GROUP_GAMES:
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {}
-                GROUP_GAMES[SUPPORT_GROUP_ID][\"setup_message_id\"] = sent.message_id
-                GROUP_GAMES[SUPPORT_GROUP_ID][\"quiz_id\"] = quiz_id
+                GROUP_GAMES[SUPPORT_GROUP_ID]["setup_message_id"] = sent.message_id
+                GROUP_GAMES[SUPPORT_GROUP_ID]["quiz_id"] = quiz_id
             except Exception as e:
-                logging.error(f\"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}\")
+                logging.error(f"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}")
 
             # update next_run in DB
             next_ts = (datetime.utcnow() + timedelta(minutes=interval_minutes)).isoformat()
             with sqlite3.connect(DB_FILE) as conn:
                 cur = conn.cursor()
-                cur.execute(\"UPDATE autoruns SET next_run = ? WHERE id = ?\", (next_ts, autorun_id))
+                cur.execute("UPDATE autoruns SET next_run = ? WHERE id = ?", (next_ts, autorun_id))
                 conn.commit()
 
             # Sleep until next run
             await asyncio.sleep(interval_minutes * 60)
     except asyncio.CancelledError:
-        logging.info(f\"Autorun worker {autorun_id} cancelled\")
+        logging.info(f"Autorun worker {autorun_id} cancelled")
     except Exception as e:
-        logging.error(f\"Error in autorun_worker {autorun_id}: {e}\")
+        logging.error(f"Error in autorun_worker {autorun_id}: {e}")
 
 
 def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes):
@@ -2876,7 +2876,7 @@ def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes):
         return
     task = asyncio.create_task(autorun_worker(app, autorun_id, quiz_id, interval_minutes))
     AUTORUN_TASKS[autorun_id] = task
-    logging.info(f\"Scheduled autorun {autorun_id} for quiz {quiz_id} every {interval_minutes}min\")
+    logging.info(f"Scheduled autorun {autorun_id} for quiz {quiz_id} every {interval_minutes}min")
 
 
 def cancel_autorun_task(autorun_id):
@@ -2892,13 +2892,13 @@ async def load_autoruns_on_startup(app):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            cur.execute(\"SELECT id, quiz_id, interval_minutes FROM autoruns WHERE active = 1\")
+            cur.execute("SELECT id, quiz_id, interval_minutes FROM autoruns WHERE active = 1")
             rows = cur.fetchall()
         for autorun_id, quiz_id, interval in rows:
             schedule_autorun_task(app, autorun_id, quiz_id, interval)
-        logging.info(f\"Loaded {len(rows)} autorun(s) from DB on startup.\")
+        logging.info(f"Loaded {len(rows)} autorun(s) from DB on startup.")
     except Exception as e:
-        logging.error(f\"Error loading autoruns on startup: {e}\")
+        logging.error(f"Error loading autoruns on startup: {e}")
 # ---------------- end autorun helpers ------------------
 
 async def autorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
