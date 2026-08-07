@@ -3000,11 +3000,11 @@ async def main():
         
         # 🔥 Initialize Auto-Runner System
         # 🔥 Initialize Auto-Runner System
-if SUPPORT_GROUP_ID:
-    AUTO_RUNNER = await init_auto_runner(app.context, SUPPORT_GROUP_ID, GROUP_GAMES)
-    logging.info(f"✅ Auto-Runner System Started - Running quizzes in Group: {SUPPORT_GROUP_ID}")
-else:
-    logging.warning("⚠️ SUPPORT_GROUP_ID not configured - Auto-Runner disabled")
+        if SUPPORT_GROUP_ID:
+            AUTO_RUNNER = await init_auto_runner(app.context, SUPPORT_GROUP_ID, GROUP_GAMES)
+            logging.info(f"✅ Auto-Runner System Started - Running quizzes in Group: {SUPPORT_GROUP_ID}")
+        else:
+            logging.warning("⚠️ SUPPORT_GROUP_ID not configured - Auto-Runner disabled")
     
         await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         
