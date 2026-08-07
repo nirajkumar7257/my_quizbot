@@ -2799,6 +2799,197 @@ async def execute_broadcast_callback(update: Update, context: ContextTypes.DEFAU
     except Exception:
         await context.bot.send_message(chat_id=query.message.chat.id, text=report_text, parse_mode="Markdown")
 
+# ------------------ Autorun helpers ------------------
+async def autorun_worker(app, autorun_id, quiz_id, interval_minutes):
+    """Background loop: post the quiz setup panel in SUPPORT_GROUP_ID every interval."""
+    try:
+        while True:
+            # Check DB active flag
+            with sqlite3.connect(DB_FILE) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT active FROM autoruns WHERE id = ?", (autorun_id,))
+                row = cur.fetchone()
+                if not row or row[0] != 1:
+                    break  # stopped via DB
+
+                cur.execute("SELECT title, description, timer, negative_value FROM quizzes WHERE quiz_id = ?", (quiz_id,))
+                quiz = cur.fetchone()
+
+            if not quiz:
+                logging.warning(f"Autorun {autorun_id}: quiz {quiz_id} not found, stopping.")
+                break
+
+            title, desc, timer, negative_value = quiz
+            time_disp = f\"{timer} sec\" if timer < 60 else f\"{timer // 60} min\"
+            db_neg_val = negative_value if negative_value is not None else 0.0
+
+            init_text = (
+                f\"🎲 *Get ready for the quiz!*\\n\\n\"
+                f\"📚 *Title:* {escape_markdown(title)}\\n\"
+                f\"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\\n\"
+                f\"⏱ *Time per question:* {time_disp}\\n\"
+                f\"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\\n\\n\"
+                \"🏁 *Click 'I am ready!' to start the quiz.*\\n\"
+                \"🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*\"
+            )
+
+            raw_button = {
+                \"text\": \"I am ready!  (0)\",
+                \"callback_data\": f\"ready_{quiz_id}\",
+                \"style\": \"primary\"
+            }
+            kb = [[raw_button]]
+
+            try:
+                sent = await app.bot.send_message(
+                    chat_id=SUPPORT_GROUP_ID,
+                    text=init_text,
+                    reply_markup=InlineKeyboardMarkup(kb),
+                    parse_mode=\"Markdown\"
+                )
+                # Track last setup message for support group
+                if SUPPORT_GROUP_ID not in GROUP_GAMES:
+                    GROUP_GAMES[SUPPORT_GROUP_ID] = {}
+                GROUP_GAMES[SUPPORT_GROUP_ID][\"setup_message_id\"] = sent.message_id
+                GROUP_GAMES[SUPPORT_GROUP_ID][\"quiz_id\"] = quiz_id
+            except Exception as e:
+                logging.error(f\"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}\")
+
+            # update next_run in DB
+            next_ts = (datetime.utcnow() + timedelta(minutes=interval_minutes)).isoformat()
+            with sqlite3.connect(DB_FILE) as conn:
+                cur = conn.cursor()
+                cur.execute(\"UPDATE autoruns SET next_run = ? WHERE id = ?\", (next_ts, autorun_id))
+                conn.commit()
+
+            # Sleep until next run
+            await asyncio.sleep(interval_minutes * 60)
+    except asyncio.CancelledError:
+        logging.info(f\"Autorun worker {autorun_id} cancelled\")
+    except Exception as e:
+        logging.error(f\"Error in autorun_worker {autorun_id}: {e}\")
+
+
+def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes):
+    """Create and register an asyncio task for the autorun loop."""
+    if autorun_id in AUTORUN_TASKS and not AUTORUN_TASKS[autorun_id].done():
+        return
+    task = asyncio.create_task(autorun_worker(app, autorun_id, quiz_id, interval_minutes))
+    AUTORUN_TASKS[autorun_id] = task
+    logging.info(f\"Scheduled autorun {autorun_id} for quiz {quiz_id} every {interval_minutes}min\")
+
+
+def cancel_autorun_task(autorun_id):
+    """Cancel and remove a running autorun task."""
+    task = AUTORUN_TASKS.get(autorun_id)
+    if task and not task.done():
+        task.cancel()
+    AUTORUN_TASKS.pop(autorun_id, None)
+
+
+async def load_autoruns_on_startup(app):
+    """Load active autoruns from DB and schedule them (call this in main after app ready)."""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            cur.execute(\"SELECT id, quiz_id, interval_minutes FROM autoruns WHERE active = 1\")
+            rows = cur.fetchall()
+        for autorun_id, quiz_id, interval in rows:
+            schedule_autorun_task(app, autorun_id, quiz_id, interval)
+        logging.info(f\"Loaded {len(rows)} autorun(s) from DB on startup.\")
+    except Exception as e:
+        logging.error(f\"Error loading autoruns on startup: {e}\")
+# ---------------- end autorun helpers ------------------
+
+async def autorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    \"\"\"Owner-only: /autorun <quiz_id> <interval_minutes?> — schedule posting in SUPPORT_GROUP_ID.\"\"\"
+    try:
+        if OWNER_ID is None or update.message.from_user.id != OWNER_ID:
+            await update.message.reply_text(\"❌ Unauthorized\")
+            return
+        if not SUPPORT_GROUP_ID:
+            await update.message.reply_text(\"❌ SUPPORT_GROUP_ID not configured in .env\")
+            return
+        args = context.args or []
+        if len(args) < 1:
+            await update.message.reply_text(\"Usage: /autorun <quiz_id> <interval_minutes (default 60)>\")
+            return
+        try:
+            quiz_id = int(args[0])
+        except ValueError:
+            await update.message.reply_text(\"Invalid quiz_id\")
+            return
+        interval = int(args[1]) if len(args) > 1 else 60
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            cur.execute(\"SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1\", (quiz_id,))
+            row = cur.fetchone()
+            if row:
+                autorun_id = row[0]
+                cur.execute(\"UPDATE autoruns SET interval_minutes = ? WHERE id = ?\", (interval, autorun_id))
+            else:
+                cur.execute(\"INSERT INTO autoruns (quiz_id, interval_minutes) VALUES (?, ?)\", (quiz_id, interval))
+                autorun_id = cur.lastrowid
+            conn.commit()
+        # schedule task
+        schedule_autorun_task(context.application, autorun_id, quiz_id, interval)
+        await update.message.reply_text(f\"✅ Autorun scheduled: quiz {quiz_id} every {interval} minutes (id={autorun_id})\")
+    except Exception as e:
+        logging.error(f\"Error in autorun_command: {e}\")
+        await update.message.reply_text(\"❌ Error scheduling autorun\")
+
+
+async def stopautorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    \"\"\"Owner-only: /stopautorun <autorun_id|quiz_id|all>\"\"\"
+    try:
+        if OWNER_ID is None or update.message.from_user.id != OWNER_ID:
+            await update.message.reply_text(\"❌ Unauthorized\")
+            return
+        args = context.args or []
+        if not args:
+            await update.message.reply_text(\"Usage: /stopautorun <autorun_id|quiz_id|all>\")
+            return
+        key = args[0].lower()
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            if key == \"all\":
+                cur.execute(\"UPDATE autoruns SET active = 0 WHERE active = 1\")
+                conn.commit()
+                for aid in list(AUTORUN_TASKS.keys()):
+                    cancel_autorun_task(aid)
+                await update.message.reply_text(\"✅ All autoruns stopped.\")
+                return
+            # try interpret as autorun id
+            try:
+                aid = int(key)
+                cur.execute(\"UPDATE autoruns SET active = 0 WHERE id = ?\", (aid,))
+                conn.commit()
+                cancel_autorun_task(aid)
+                await update.message.reply_text(f\"✅ Autorun {aid} stopped.\")
+                return
+            except ValueError:
+                # treat as quiz_id
+                try:
+                    qid = int(key)
+                    cur.execute(\"SELECT id FROM autoruns WHERE quiz_id = ? AND active = 1\", (qid,))
+                    rows = cur.fetchall()
+                    if not rows:
+                        await update.message.reply_text(\"No active autorun found for that quiz.\")
+                        return
+                    for (aid,) in rows:
+                        cur.execute(\"UPDATE autoruns SET active = 0 WHERE id = ?\", (aid,))
+                        cancel_autorun_task(aid)
+                    conn.commit()
+                    await update.message.reply_text(f\"✅ Stopped {len(rows)} autorun(s) for quiz {qid}.\")
+                    return
+                except ValueError:
+                    await update.message.reply_text(\"Invalid parameter.\")
+                    return
+    except Exception as e:
+        logging.error(f\"Error in stopautorun_command: {e}\")
+        await update.message.reply_text(\"❌ Error stopping autorun\")
+
+        
 # 🔥 NEW AUTO-RUNNER STATUS COMMAND
 async def auto_runner_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check auto-runner status (owner only)"""
