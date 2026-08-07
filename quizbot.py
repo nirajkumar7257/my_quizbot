@@ -18,8 +18,6 @@ from telegram.ext import (
 )
 from telegram.error import NetworkError
 from telegram.request import HTTPXRequest
-# ✨ Import Auto-Runner
-from quiz_auto_runner import init_auto_runner
 
 # Enable Logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -36,8 +34,6 @@ DB_FILE = "quiz_bot.db"
 # Global dictionary for active group games memory
 GROUP_GAMES = {}
 
-# Auto-runner instance (will be initialized in main)
-AUTO_RUNNER = None
 # In-memory map for autorun asyncio tasks: key = autorun_id, value = asyncio.Task
 AUTORUN_TASKS = {}
 # ====================================================================
@@ -3028,33 +3024,6 @@ async def stopautorun_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logging.error(f"Error in stopautorun_command: {e}")
         await update.message.reply_text("❌ Error stopping autorun")
-        
-# 🔥 NEW AUTO-RUNNER STATUS COMMAND
-async def auto_runner_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Check auto-runner status (owner only)"""
-    try:
-        if OWNER_ID is None or update.message.from_user.id != OWNER_ID:
-            await update.message.reply_text("❌ Unauthorized")
-            return
-        
-        if not AUTO_RUNNER:
-            await update.message.reply_text("❌ Auto-Runner not initialized")
-            return
-        
-        status = await AUTO_RUNNER.get_runner_status()
-        
-        status_text = (
-            f"🤖 *Quiz Auto-Runner Status*\n\n"
-            f"📊 *Total Quizzes:* {status['total_quizzes']}\n"
-            f"🎮 *Currently Running:* {status['current_running'] or 'None'}\n"
-            f"👥 *Players Joined:* {status['players_joined']}\n"
-            f"✅ *Support Group:* {'Configured' if status['group_configured'] else 'Not Set'}\n"
-            f"⏱️ *Last Check:* {status['timestamp']}"
-        )
-        
-        await update.message.reply_text(status_text, parse_mode="Markdown")
-    except Exception as e:
-        logging.error(f"Error in auto_runner_status: {e}")
         
 # ⚡ send message to support group (only use owner)
 async def send_to_support_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
