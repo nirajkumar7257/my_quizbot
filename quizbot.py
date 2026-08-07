@@ -3191,6 +3191,8 @@ async def main():
         # 🔴 Quiz pause/resume handlers
         app.add_handler(CallbackQueryHandler(handle_pause_quiz, pattern="^pausequiz_"))
         app.add_handler(CallbackQueryHandler(handle_stop_quiz_from_pause, pattern="^stopquiz_"))
+        app.add_handler(CommandHandler("autorun", autorun_command))
+        app.add_handler(CommandHandler("stopautorun", stopautorun_command))
         
         app.add_handler(PollAnswerHandler(track_poll_answers))
         app.add_handler(InlineQueryHandler(inline_query_handler))
@@ -3206,7 +3208,8 @@ async def main():
             logging.info(f"✅ Auto-Runner System Started - Running quizzes in Group: {SUPPORT_GROUP_ID}")
         else:
             logging.warning("⚠️ SUPPORT_GROUP_ID not configured - Auto-Runner disabled")
-        
+        # Load persisted autoruns and schedule them
+        await load_autoruns_on_startup(app)
         await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         
         # Bot ko running state me rakhne ke liye infinite event wait loop
