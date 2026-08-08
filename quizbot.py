@@ -1686,6 +1686,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "is_private": False,
                 "quiz_paused": False,
                 "consecutive_no_answers": 0,
+                "previous_panel_message_id": None,  # 👈 NAYI LINE - puraane panel track karne ke liye
                 # lock to avoid double-starts
                 "start_lock": asyncio.Lock()
             }
@@ -1704,6 +1705,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
         game.setdefault("quiz_started", False)
         game.setdefault("quiz_paused", False)
         game.setdefault("consecutive_no_answers", 0)
+        game.setdefault("previous_panel_message_id", None)  # 👈 NAYI LINE
         # Ensure lock exists
         if "start_lock" not in game or not isinstance(game["start_lock"], asyncio.Lock):
             game["start_lock"] = asyncio.Lock()
@@ -1764,7 +1766,7 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     game.pop("starting", None)
                     return
 
-                # Properly remove inline keyboard (reply_markup=None removes it)
+                # 🔥 NAYI FIX: Current ready panel ka button hide karo
                 try:
                     await query.edit_message_reply_markup(reply_markup=None)
                 except Exception as e:
@@ -1775,6 +1777,18 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=setup_mid, reply_markup=None)
                     except Exception as e2:
                         logging.warning(f"Fallback edit_message_reply_markup failed: {e2}")
+
+                # 🟢 NAYI FIX: Agar koi previous panel message tha (autorun ka), toh uska bhi button hide karo
+                if game.get("previous_panel_message_id"):
+                    try:
+                        await context.bot.edit_message_reply_markup(
+                            chat_id=chat_id, 
+                            message_id=game["previous_panel_message_id"], 
+                            reply_markup=None
+                        )
+                        logging.info(f"Removed buttons from previous panel message {game['previous_panel_message_id']}")
+                    except Exception as e:
+                        logging.warning(f"Could not remove buttons from previous panel: {e}")
 
                 # Small countdown (best-effort, won't block the lock for long)
                 try:
@@ -2920,12 +2934,18 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
 
             sent = None
             try:
+                # 🔥 PEHLE puraane panel message ID save karo (agar koi chal raha ho toh)
+                old_panel_id = None
+                if SUPPORT_GROUP_ID in GROUP_GAMES:
+                    old_panel_id = GROUP_GAMES[SUPPORT_GROUP_ID].get("setup_message_id")
+
                 sent = await app.bot.send_message(
                     chat_id=SUPPORT_GROUP_ID,
                     text=init_text,
                     reply_markup=kb,
                     parse_mode="Markdown"
                 )
+                
                 # Ensure a full game state exists for autorun-posted panel so ready clicks work
                 if SUPPORT_GROUP_ID not in GROUP_GAMES:
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {}
@@ -2934,6 +2954,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                     "quiz_id": quiz_id,
                     "setup_message_id": sent.message_id if sent else None,
                     "setup_panel_text": init_text,
+                    "previous_panel_message_id": old_panel_id,  # 👈 NAYI LINE - puraana panel track karo
                     "joined_users": {},
                     "scores": {},
                     "poll_map": {},
@@ -2947,7 +2968,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                     "quiz_paused": False,
                     "consecutive_no_answers": 0
                 })
-                logging.info(f"Autorun {autorun_id}: posted setup panel in support group (msg={sent.message_id})")
+                logging.info(f"Autorun {autorun_id}: posted setup panel in support group (msg={sent.message_id}, prev={old_panel_id})")
             except Exception as e:
                 logging.error(f"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}")
 
@@ -2988,7 +3009,8 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                         "setup_message_id": sent.message_id if sent else None,
                         "is_private": False,
                         "quiz_paused": False,
-                        "consecutive_no_answers": 0
+                        "consecutive_no_answers": 0,
+                        "previous_panel_message_id": None  # 👈 NAYI LINE
                     }
                     logging.info(f"Autorun {autorun_id}: auto-starting quiz {quiz_id} in support group (ready={ready_count})")
                     # Start sending questions
