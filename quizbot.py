@@ -1595,46 +1595,80 @@ async def save_edited_negative(update: Update, context: ContextTypes.DEFAULT_TYP
 # 🎯 SINGLE READY BUTTON DRIVEN ACTIVATION
 # ==========================================
 async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Auto-joins users and sets dynamic counter to verify activation benchmarks"""
+    """Auto-joins users and sets dynamic counter to verify activation benchmarks (race-safe)."""
     try:
         query = update.callback_query
-        chat_id = query.message.chat_id
-        message_id = query.message.message_id
-        user_id = query.from_user.id
-        user_name = query.from_user.username if query.from_user.username else query.from_user.first_name
+        if not query:
+            logging.warning("handle_ready_click called without callback_query")
+            return
 
-        # Safe string check and parsing
-        parts = query.data.split("_")
-        if len(parts) < 2:
+        if not query.message:
+            logging.warning("handle_ready_click: callback_query.message is None")
             try:
-                await query.answer("❌ Invalid data format.", show_alert=True)
+                await query.answer("Unable to process (message not found).", show_alert=True)
+            except Exception:
+                pass
+            return
+
+        chat = query.message.chat
+        if not chat:
+            logging.warning("handle_ready_click: message.chat is None")
+            try:
+                await query.answer("Unable to process (chat not found).", show_alert=True)
+            except Exception:
+                pass
+            return
+
+        chat_id = chat.id
+        message_id = getattr(query.message, "message_id", None)
+        user = query.from_user
+        if not user:
+            logging.warning("handle_ready_click: callback_query.from_user is None")
+            try:
+                await query.answer("Unable to identify you.", show_alert=True)
+            except Exception:
+                pass
+            return
+
+        user_id = user.id
+        user_name = user.username or user.first_name or "Player"
+        logging.info(f"handle_ready_click invoked: chat_id={chat_id} msg_id={message_id} user_id={user_id}")
+
+        # Parse callback data safely
+        data = query.data or ""
+        parts = data.split("_")
+        if len(parts) < 2:
+            logging.warning(f"handle_ready_click: invalid callback data: {data}")
+            try:
+                await query.answer("Invalid data format.", show_alert=True)
             except Exception:
                 pass
             return
 
         try:
             quiz_id = int(parts[1])
-        except ValueError:
+        except Exception:
+            logging.warning(f"handle_ready_click: cannot parse quiz id from: {parts[1]}")
             try:
-                await query.answer("❌ Invalid Quiz ID format.", show_alert=True)
+                await query.answer("Invalid quiz id.", show_alert=True)
             except Exception:
                 pass
             return
 
-        # If an old game exists but is paused/different quiz, clear it
-        if chat_id in GROUP_GAMES:
-            old_game = GROUP_GAMES[chat_id]
+        # Ensure a game state exists and normalize it
+        game = GROUP_GAMES.get(chat_id)
+        if game:
             try:
-                old_quiz_id = int(old_game.get("quiz_id", 0))
+                old_qid = int(game.get("quiz_id", 0))
             except Exception:
-                old_quiz_id = 0
+                old_qid = None
+            if (old_qid is not None and old_qid != quiz_id) and not game.get("quiz_started"):
+                logging.info(f"Clearing stale GROUP_GAMES entry for chat {chat_id} (old_qid={old_qid} != {quiz_id})")
+                GROUP_GAMES.pop(chat_id, None)
+                game = None
 
-            if old_game.get("quiz_paused") or old_quiz_id != quiz_id:
-                if not old_game.get("quiz_started") or old_game.get("setup_message_id") != message_id:
-                    del GROUP_GAMES[chat_id]
-
-        # Initialize game state if required
-        if chat_id not in GROUP_GAMES:
+        if not game:
+            # create new in-memory game state; include a per-game asyncio.Lock for start-race protection
             GROUP_GAMES[chat_id] = {
                 "quiz_id": quiz_id,
                 "joined_users": {},
@@ -1651,21 +1685,18 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "setup_panel_text": query.message.text,
                 "is_private": False,
                 "quiz_paused": False,
-                "consecutive_no_answers": 0
+                "consecutive_no_answers": 0,
+                # lock to avoid double-starts
+                "start_lock": asyncio.Lock()
             }
-        else:
-            # Ensure setup_message_id saved (useful for removing markup)
-            if GROUP_GAMES[chat_id].get("setup_message_id") is None:
-                GROUP_GAMES[chat_id]["setup_message_id"] = message_id
-                GROUP_GAMES[chat_id]["setup_panel_text"] = query.message.text
+            game = GROUP_GAMES[chat_id]
 
-        game = GROUP_GAMES[chat_id]
-
-        # Ensure required structures exist
+        # Ensure keys + types
         game.setdefault("joined_users", {})
         game.setdefault("scores", {})
         game.setdefault("user_answers", {})
-        game.setdefault("ready_users", set())
+        if not isinstance(game.get("ready_users"), set):
+            game["ready_users"] = set(game.get("ready_users") or [])
         game.setdefault("poll_map", {})
         game.setdefault("poll_message_ids", {})
         game.setdefault("question_start_times", {})
@@ -1673,124 +1704,121 @@ async def handle_ready_click(update: Update, context: ContextTypes.DEFAULT_TYPE)
         game.setdefault("quiz_started", False)
         game.setdefault("quiz_paused", False)
         game.setdefault("consecutive_no_answers", 0)
+        # Ensure lock exists
+        if "start_lock" not in game or not isinstance(game["start_lock"], asyncio.Lock):
+            game["start_lock"] = asyncio.Lock()
 
-        # If another process is starting the quiz, ignore further clicks
+        # If another routine is starting the quiz, politely tell the user and return
         if game.get("starting"):
+            logging.info(f"handle_ready_click: start-in-progress for chat {chat_id}, ignoring click from {user_id}")
             try:
                 await query.answer("Quiz is starting, please wait...", show_alert=False)
             except Exception:
                 pass
             return
 
-        # If quiz already started -> silently add user & ack
+        # If quiz already started, just add the user and ack
         if game.get("quiz_started"):
             if user_id not in game["joined_users"]:
-                game["joined_users"][user_id] = f"@{user_name}" if query.from_user.username else user_name
+                game["joined_users"][user_id] = f"@{user_name}" if user.username else user_name
                 game["scores"][user_id] = {"score": 0, "total_time": 0.0, "wrong": 0, "points": 0.0}
                 game["user_answers"][user_id] = {}
-            # ready_users may be a set; ensure add works
-            if isinstance(game.get("ready_users"), set):
-                game["ready_users"].add(user_id)
-            else:
-                # fallback if list was persisted somewhere
-                ru = set(game.get("ready_users", []))
-                ru.add(user_id)
-                game["ready_users"] = ru
+            game["ready_users"].add(user_id)
+            logging.info(f"Added user {user_id} to running quiz in chat {chat_id}")
             try:
                 await query.answer("Aapko chalte countdown me shaamil kar liya gaya hai! ⚡", show_alert=False)
             except Exception:
                 pass
             return
 
-        # Normal join flow (before quiz starts)
+        # Normal pre-start join
         if user_id not in game["joined_users"]:
-            game["joined_users"][user_id] = f"@{user_name}" if query.from_user.username else user_name
+            game["joined_users"][user_id] = f"@{user_name}" if user.username else user_name
             game["scores"][user_id] = {"score": 0, "total_time": 0.0, "wrong": 0, "points": 0.0}
             game["user_answers"][user_id] = {}
 
-        # Ensure ready_users is a set
-        if isinstance(game.get("ready_users"), set):
-            game["ready_users"].add(user_id)
-        else:
-            ru = set(game.get("ready_users", []))
-            ru.add(user_id)
-            game["ready_users"] = ru
-
+        game["ready_users"].add(user_id)
         ready_count = len(game["ready_users"])
+        logging.info(f"Chat {chat_id} ready_count={ready_count}")
 
-        # Detect private chat single-player mode
-        is_private_chat = str(query.message.chat.type) == "private" or (hasattr(query.message.chat.type, "value") and query.message.chat.type.value == "private")
+        # Determine threshold (private vs group)
+        is_private_chat = str(chat.type) == "private" or (hasattr(chat.type, "value") and getattr(chat.type, "value", "") == "private")
         min_ready_required = 1 if is_private_chat else 2
 
-        # If threshold reached and quiz not yet starting -> begin start sequence
+        # If threshold reached, do an atomic start guarded by start_lock
         if ready_count >= min_ready_required and not game.get("quiz_started"):
-            # Acquire a starting lock to avoid race conditions
+            # Use the per-game lock to ensure only one coroutine runs the start sequence
+            lock = game["start_lock"]
+            # indicate we are attempting to start (helps other code paths)
             game["starting"] = True
+            logging.info(f"Threshold reached in chat {chat_id} (ready={ready_count}, min={min_ready_required}) - attempting to start quiz {quiz_id}")
             try:
                 await query.answer("🎯 Target achieved! Quiz start ho rahi hai...")
             except Exception:
                 pass
 
-            # Properly remove inline keyboard from the setup message (reply_markup=None removes it)
-            try:
-                await query.edit_message_reply_markup(reply_markup=None)
-            except Exception:
-                # fallback: try editing the stored setup_message_id (some flows post different message)
-                try:
-                    setup_mid = game.get("setup_message_id")
-                    if setup_mid and setup_mid != message_id:
-                        await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=setup_mid, reply_markup=None)
-                except Exception:
-                    pass
+            async with lock:
+                # double-check inside lock in case another coroutine already started
+                if game.get("quiz_started"):
+                    logging.info(f"handle_ready_click: another coroutine already started the quiz for chat {chat_id}")
+                    game.pop("starting", None)
+                    return
 
-            # small countdown messages (transient)
-            try:
-                for count in ["🎲 The quiz is about to begin…", "3️⃣....", "2️⃣Ready...", "1️⃣ SET…", "Go..🚀"]:
-                    countdown_msg = await context.bot.send_message(chat_id=chat_id, text=count)
-                    await asyncio.sleep(1)
+                # Properly remove inline keyboard (reply_markup=None removes it)
+                try:
+                    await query.edit_message_reply_markup(reply_markup=None)
+                except Exception as e:
+                    logging.warning(f"edit_message_reply_markup failed on callback message: {e}")
                     try:
-                        await context.bot.delete_message(chat_id=chat_id, message_id=countdown_msg.message_id)
-                    except Exception:
-                        pass
-            except Exception:
-                # if countdown fails, continue to start
-                logging.warning("Countdown routine encountered an issue; proceeding to start.")
+                        setup_mid = game.get("setup_message_id")
+                        if setup_mid and setup_mid != message_id:
+                            await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=setup_mid, reply_markup=None)
+                    except Exception as e2:
+                        logging.warning(f"Fallback edit_message_reply_markup failed: {e2}")
 
-            # Banner message briefly
-            try:
-                banner_msg = await context.bot.send_message(chat_id=chat_id, text="🔥 Get ready! Quiz shuru ho rahi hai... 🚀")
-                await asyncio.sleep(2)
+                # Small countdown (best-effort, won't block the lock for long)
                 try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=banner_msg.message_id)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+                    for count in ["🎲 The quiz is about to begin…", "3️⃣....", "2️⃣Ready...", "1️⃣ SET…", "Go..🚀"]:
+                        cmsg = await context.bot.send_message(chat_id=chat_id, text=count)
+                        await asyncio.sleep(1)
+                        try:
+                            await context.bot.delete_message(chat_id=chat_id, message_id=cmsg.message_id)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logging.warning(f"Countdown failed: {e}")
 
-            # Finalize start state
-            game["current_q"] = 0
-            game["quiz_started"] = True
-            game.pop("starting", None)
+                # Finalize start state inside lock
+                game["current_q"] = 0
+                game["quiz_started"] = True
+                # clear starting flag (we are inside lock so safe)
+                game.pop("starting", None)
 
-            # Start sending questions in background
-            asyncio.create_task(send_next_group_poll(chat_id, context))
-        else:
-            # Update live ready button count (edit only the markup)
-            try:
-                raw_live_ready_btn = InlineKeyboardButton(text=f"I am ready!  ({ready_count})", callback_data=f"ready_{quiz_id}")
-                keyboard = [[raw_live_ready_btn]]
-                await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
-            except Exception:
-                pass
-            try:
-                await query.answer("Aapne confirmation register kar di! 👍")
-            except Exception:
-                pass
+                # Start sending questions once and only once
+                try:
+                    asyncio.create_task(send_next_group_poll(chat_id, context))
+                except Exception as e:
+                    logging.error(f"Failed to schedule send_next_group_poll: {e}")
+
+            return
+
+        # Otherwise just update the ready-count button
+        try:
+            live_btn = InlineKeyboardButton(text=f"I am ready!  ({ready_count})", callback_data=f"ready_{quiz_id}")
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([[live_btn]]))
+        except Exception as e:
+            logging.debug(f"Could not update ready-button markup: {e}")
+
+        try:
+            await query.answer("Aapne confirmation register kar di! 👍")
+        except Exception:
+            pass
 
     except Exception as e:
-        logging.error(f"Error in handle_ready_click: {e}")
+        logging.exception(f"Unexpected error in handle_ready_click: {e}")
         try:
-            await query.answer("Aap successfully jud chuke hain! 👍", show_alert=False)
+            if update and getattr(update, "callback_query", None):
+                await update.callback_query.answer("An error occurred while joining. Try again.", show_alert=True)
         except Exception:
             pass
             
