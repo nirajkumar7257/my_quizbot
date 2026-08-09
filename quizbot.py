@@ -2882,7 +2882,7 @@ async def execute_broadcast_callback(update: Update, context: ContextTypes.DEFAU
 # ------------------ Autorun helpers ------------------
 async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
     """Background loop: post the quiz setup panel in SUPPORT_GROUP_ID every interval,
-       wait a bit, then optionally auto-start the quiz in that group."""
+       wait a bit, then auto-start the quiz (no 'I am ready' button)."""
     try:
         while True:
             # Check DB active flag
@@ -2905,48 +2905,49 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
             db_neg_val = negative_value if negative_value is not None else 0.0
 
             init_text = (
-                f"🎮 *LIVE QUIZ STARTING NOW!*\n\n"
-                f"*Get ready for the quiz!*\n"
+                f"🎮 *LIVE QUIZ POSTED*\n\n"
                 f"📚 *Title:* {escape_markdown(title)}\n"
                 f"🔥 *Description:* {escape_markdown(desc) if desc else 'No description'}\n"
+                f"🖊️ *Questions:* (will start automatically)\n"
                 f"⏱ *Time per question:* {time_disp}\n"
                 f"📉 *Negative Marking:* `-{db_neg_val} Marks` per wrong answer\n\n"
-                "🏁 *Click 'I am ready!' to start the quiz.*\n"
-                "🏁 *The quiz will begin when at least 2 people are ready. Send /stop to stop it.*"
+                "🏁 *This quiz will start automatically shortly.*\n"
+                "🏁 *Use /stop in the group to stop it once started.*"
             )
 
             # Skip posting if a quiz is already running in the support group
             if SUPPORT_GROUP_ID in GROUP_GAMES and GROUP_GAMES[SUPPORT_GROUP_ID].get("quiz_started"):
                 logging.info(f"Autorun {autorun_id}: skipping post because a quiz is already running in support group")
-                # update next_run anyway
                 next_ts = (datetime.utcnow() + timedelta(minutes=interval_minutes)).isoformat()
                 with sqlite3.connect(DB_FILE) as conn:
                     cur = conn.cursor()
                     cur.execute("UPDATE autoruns SET next_run = ? WHERE id = ?", (next_ts, autorun_id))
                     conn.commit()
-                # wait until next scheduled run
                 await asyncio.sleep(interval_minutes * 60)
                 continue
 
-            # Use InlineKeyboardButton and ensure consistent in-memory game state
-            button = InlineKeyboardButton("I am ready!", callback_data=f"ready_{quiz_id}")
-            kb = InlineKeyboardMarkup([[button]])
-
             sent = None
             try:
-                # 🔥 PEHLE puraane panel message ID save karo (agar koi chal raha ho toh)
+                # Save old panel id to attempt cleanup (unpin/delete) later
                 old_panel_id = None
                 if SUPPORT_GROUP_ID in GROUP_GAMES:
                     old_panel_id = GROUP_GAMES[SUPPORT_GROUP_ID].get("setup_message_id")
 
+                # Post panel WITHOUT any inline buttons
                 sent = await app.bot.send_message(
                     chat_id=SUPPORT_GROUP_ID,
                     text=init_text,
-                    reply_markup=kb,
                     parse_mode="Markdown"
                 )
-                
-                # Ensure a full game state exists for autorun-posted panel so ready clicks work
+
+                # Try pinning — requires bot admin permission; catch failures
+                try:
+                    if sent and hasattr(sent, "message_id"):
+                        await app.bot.pin_chat_message(chat_id=SUPPORT_GROUP_ID, message_id=sent.message_id, disable_notification=False)
+                except Exception as e:
+                    logging.warning(f"Autorun {autorun_id}: pin failed for message {getattr(sent, 'message_id', None)}: {e}")
+
+                # Ensure a full game state exists for autorun-posted panel so internal logic works
                 if SUPPORT_GROUP_ID not in GROUP_GAMES:
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {}
 
@@ -2954,7 +2955,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                     "quiz_id": quiz_id,
                     "setup_message_id": sent.message_id if sent else None,
                     "setup_panel_text": init_text,
-                    "previous_panel_message_id": old_panel_id,  # 👈 NAYI LINE - puraana panel track karo
+                    "previous_panel_message_id": old_panel_id,
                     "joined_users": {},
                     "scores": {},
                     "poll_map": {},
@@ -2968,7 +2969,8 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                     "quiz_paused": False,
                     "consecutive_no_answers": 0
                 })
-                logging.info(f"Autorun {autorun_id}: posted setup panel in support group (msg={sent.message_id}, prev={old_panel_id})")
+
+                logging.info(f"Autorun {autorun_id}: posted & (attempted) pinned panel in support group (msg={getattr(sent,'message_id',None)}, prev={old_panel_id})")
             except Exception as e:
                 logging.error(f"Autorun: failed to post panel for quiz {quiz_id} in support group: {e}")
 
@@ -2988,12 +2990,14 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
 
             # Decide whether to auto-start
             try:
+                # If you want to ignore ready_users entirely and always start, set start_condition = True
                 game = GROUP_GAMES.get(SUPPORT_GROUP_ID, {})
                 ready_users = game.get("ready_users", set()) if isinstance(game.get("ready_users", None), set) else set(game.get("ready_users", []))
                 ready_count = len(ready_users)
+                start_condition = force_start or (ready_count >= min_players_required)
 
-                if force_start or ready_count >= min_players_required:
-                    # Initialize game state if not present or reset for this autorun
+                if start_condition:
+                    # initialize/reset running game state and mark started
                     GROUP_GAMES[SUPPORT_GROUP_ID] = {
                         "quiz_id": quiz_id,
                         "joined_users": {},
@@ -3003,16 +3007,26 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
                         "start_time": None,
                         "user_answers": {},
                         "question_start_times": {},
-                        "ready_users": set(ready_users),  # preserve any who clicked
+                        "ready_users": set(ready_users),
                         "quiz_started": True,
                         "poll_message_ids": {},
                         "setup_message_id": sent.message_id if sent else None,
                         "is_private": False,
                         "quiz_paused": False,
                         "consecutive_no_answers": 0,
-                        "previous_panel_message_id": None  # 👈 NAYI LINE
+                        "previous_panel_message_id": None
                     }
                     logging.info(f"Autorun {autorun_id}: auto-starting quiz {quiz_id} in support group (ready={ready_count})")
+
+                    # If previous panel exists and is different, try remove its pin (best-effort) to avoid clutter
+                    prev = game.get("previous_panel_message_id")
+                    if prev and prev != GROUP_GAMES[SUPPORT_GROUP_ID]["setup_message_id"]:
+                        try:
+                            # try unpin previous panel if pinned (best-effort; requires permission)
+                            await app.bot.unpin_chat_message(chat_id=SUPPORT_GROUP_ID, message_id=prev)
+                        except Exception:
+                            pass
+
                     # Start sending questions
                     asyncio.create_task(send_next_group_poll(SUPPORT_GROUP_ID, app))
                 else:
@@ -3026,6 +3040,7 @@ async def autorun_worker(app, autorun_id, quiz_id, interval_minutes, wait_before
         logging.info(f"Autorun worker {autorun_id} cancelled")
     except Exception as e:
         logging.error(f"Error in autorun_worker {autorun_id}: {e}")
+        
         
 def schedule_autorun_task(app, autorun_id, quiz_id, interval_minutes, wait_before_start=10, min_players_required=1, force_start=False):
     if autorun_id in AUTORUN_TASKS and not AUTORUN_TASKS[autorun_id].done():
